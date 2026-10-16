@@ -5,7 +5,8 @@ Read `docs/DESIGN.md` first. It explains the coordinate system, every mechanism 
 ## Project layout
 - `src/engine.js` — all geometry + the page's UI logic. A plain browser script (no build step, no modules). The page loads it with `<script src>`; the CLI and tests load it into a Node `vm` with a fake DOM (`cli/load-engine.js`).
 - `index.html` — the app: controls (their `value`/`checked` attributes are the defaults), styles, preview canvas.
-- `cli/generate.js` — headless export to a folder of STLs/SVGs plus a Bambu Studio `.3mf` (`cli/bambu-3mf.js`).
+- `cli/generate.js` — headless export to a folder of STLs/SVGs plus a Bambu Studio `.3mf`.
+- `cli/bambu-3mf.js` — isomorphic 3MF builder (Node + browser via `globalThis.Bambu3mf`); loaded by `index.html` before `engine.js`.
 - `test/` — `node --test` suite. Monte-Carlo 3D collision checks plus mechanism checks.
 
 ## Rules

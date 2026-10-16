@@ -1037,18 +1037,32 @@ async function exportZip(list,label){
   try{
     if(typeof JSZip==="undefined") throw {message:"The zip library didn't load. Reload the page and try again."};
     const zip=new JSZip(), {P}=model;
-    for(const t of list) zip.file(`tile_${t.name}.stl`, stl(tileTris(t),t.name));
-    if(list.length===model.tiles.length && model.plates.length) zip.file("splice_plates.stl", stl(plateTris(model.plates,P),"plates"));
-    if(list.length===model.tiles.length) for(const bp of model.borders) zip.file(`${bp.name.replace(" ","_").toLowerCase()}.stl`, stl(borderTris(bp),bp.name));
-    if(list.length===model.tiles.length && model.keys.length) zip.file(`bowtie_keys_x${model.keys.length}.stl`, stl(keyTris(model.keys.length,P,model.K),"keys"));
+    const parts3mf=[]; // same meshes go into a Bambu Studio .3mf when Bambu3mf is loaded
+    const add=(name,tris)=>{ zip.file(`${name}.stl`, stl(tris,name)); parts3mf.push({name,tris}); };
+    for(const t of list) add(`tile_${t.name}`, tileTris(t));
+    if(list.length===model.tiles.length && model.plates.length) add("splice_plates", plateTris(model.plates,P));
+    if(list.length===model.tiles.length) for(const bp of model.borders) add(bp.name.replace(" ","_").toLowerCase(), borderTris(bp));
+    if(list.length===model.tiles.length && model.keys.length) add(`bowtie_keys_x${model.keys.length}`, keyTris(model.keys.length,P,model.K));
     if(model.P.wall&&model.sockets.length){
       const ids=new Set(list.map(t=>model.tiles.indexOf(t))), n=model.sockets.filter(k=>ids.has(k.tile)).length;
-      if(n) zip.file(`wall_pucks_x${n}.stl`, stl(puckTris(n,P),"pucks"));
+      if(n) add(`wall_pucks_x${n}`, puckTris(n,P));
       zip.file("wall_template.svg", pegTemplateSVG());
-      {const nf=allFeet().filter(f=>f.boxes).length; if(nf) zip.file(`frame_standoffs_x${nf}.stl`, stl(standoffTris(P),"frame standoffs"));}
+      {const nf=allFeet().filter(f=>f.boxes).length; if(nf) add(`frame_standoffs_x${nf}`, standoffTris(P));}
     }
-    if(list.length===model.tiles.length&&model.P.mount){const n=model.borders.filter(b=>b.hook).length; if(n){zip.file(`wall_cleats_x${n}.stl`, stl(cleatTris(n,P),"cleats")); zip.file("wall_template.svg", wallTemplateSVG());}}
+    if(list.length===model.tiles.length&&model.P.mount){const n=model.borders.filter(b=>b.hook).length; if(n){add(`wall_cleats_x${n}`, cleatTris(n,P)); zip.file("wall_template.svg", wallTemplateSVG());}}
     zip.file("layout.svg", layoutSVG()); zip.file("README.txt", readme());
+    if(typeof Bambu3mf!=="undefined" && parts3mf.length){
+      st.textContent="Building Bambu Studio .3mf…";
+      const template=await loadBambuTemplate();
+      const objSet=Bambu3mf.latticeObjectSettings(P);
+      for(const p of parts3mf) p.obj_settings={...objSet};
+      const proj=Bambu3mf.latticeProjectOverrides(P);
+      const bed=proj._bed; delete proj._bed;
+      const pack=Bambu3mf.buildBambuPackage(parts3mf, proj, {bed, template});
+      const mf=new JSZip();
+      for(const [n,d] of Object.entries(pack.files)) mf.file(n,d);
+      zip.file(`kumiko_${P.W}x${P.H}.3mf`, await mf.generateAsync({type:"uint8array",compression:"DEFLATE"}));
+    }
     const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE"});
     st.textContent="Waiting for you to confirm the save…";
     if(!(await saveBlob(label,blob))){st.textContent="Saving isn't available in this view.";return;}
@@ -1058,6 +1072,14 @@ async function exportZip(list,label){
     st.textContent = c==="declined"?"Save cancelled.":c==="rate_limited"?"A save prompt is already open. Finish that one first.":
       (c==="unavailable"||c==="not_granted")?"Saving isn't available in this view. Open the page in claude.ai.":("Export failed: "+(err&&err.message||err));
   }
+}
+let _bambuTemplate=null;
+async function loadBambuTemplate(){
+  if(_bambuTemplate) return _bambuTemplate;
+  const r=await fetch("cli/bambu_profile_template.json");
+  if(!r.ok) throw {message:"Couldn't load the Bambu print-settings template (cli/bambu_profile_template.json)."};
+  _bambuTemplate=await r.json();
+  return _bambuTemplate;
 }
 
 /* ---------- wiring ---------- */

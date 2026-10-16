@@ -43,6 +43,21 @@ test("solidWallLoops fills bar width at 0.4 mm line width", () => {
   assert.ok(solidWallLoops(2.4) * 2 * 0.4 >= 2.4);
 });
 
+test("isomorphic builder attaches as Bambu3mf for the browser", () => {
+  const vm = require("node:vm");
+  const code = fs.readFileSync(path.join(__dirname, "../cli/bambu-3mf.js"), "utf8");
+  const sandbox = {
+    Math, JSON, Map, Object, String, Number, Array,
+    crypto: { randomUUID: () => "11111111-1111-4111-8111-111111111111" },
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(code, sandbox);
+  assert.ok(sandbox.Bambu3mf);
+  assert.strictEqual(typeof sandbox.Bambu3mf.buildBambuPackage, "function");
+  assert.strictEqual(sandbox.Bambu3mf.solidWallLoops(2.4), 3);
+});
+
 test("3MF export embeds Bambu project + per-object settings", () => {
   const E = loadEngine({ W: 200, H: 200, cell: 40 });
   E.build();

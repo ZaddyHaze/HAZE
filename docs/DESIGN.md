@@ -28,7 +28,7 @@ makeTiles(P, L, Lt)   assign cells to tiles, build bars clipped to each tile's o
 makeBorders(P, Lt, pegPts, sockets)
                       frame pieces: bar + backing lattice + snap pegs + feet / standoffs + LED cove
 render()              canvas preview, tile table, warnings
-exportZip()           STLs + SVG templates + README into a zip
+exportZip()           STLs + SVG templates + README + Bambu .3mf into a zip
 testKit(P)            small fit coupons at clearances 0.05 / 0.10 / 0.15 / 0.20 mm
 ```
 
@@ -88,5 +88,5 @@ Whole panel hangs as one piece on hooks behind the top border (`cleatDims`). Kep
 - **Inward LED cove** (second cove option): strip faces the centre to light the lattice from behind, no wall halo.
 - **Slotted puck / standoff screw holes**: ±2 mm adjustment for imperfect drilling.
 - **Borderless edge option**: so a panel can grow outward later without new frame pieces.
-- **3MF export with print settings** (CLI): `cli/generate.js` writes `kumiko_WxH.3mf` with per-object Bambu Studio settings (0.2 mm layers, 5 mm outer brim, wall loops = ceil(max(gw,iw)/(2·0.4)) so bars print solid). Web zip export is still STL-only. Bambu Studio's CLI could turn the project into a G-code `.3mf` automatically.
+- **3MF export with print settings**: CLI (`cli/generate.js`) and the page's Export zip both write `kumiko_WxH.3mf` with per-object Bambu Studio settings (0.2 mm layers, 5 mm outer brim, wall loops = ceil(max(gw,iw)/(2·0.4)) so bars print solid). Shared builder: `cli/bambu-3mf.js`. Bambu Studio's CLI could turn the project into a G-code `.3mf` automatically.
 - **Mesh boolean cleanup**: export each part as one manifold (e.g. via manifold-3d) instead of overlapping prisms.

@@ -45,7 +45,7 @@ See `docs/DESIGN.md` for how every part works, and `AGENTS.md` for rules when ed
 - `tile_A1.stl …` — lattice tiles (face down)
 - `border_t1.stl …` — frame pieces (print as exported)
 - `wall_pucks_xN.stl`, `frame_standoffs_xN.stl` — wall hardware
-- `kumiko_WxH.3mf` — Bambu Studio project: same parts, one plate each, with 0.2 mm layers, 5 mm brim, and enough wall loops for solid bars (`--no-3mf` to skip)
+- `kumiko_WxH.3mf` — Bambu Studio project: same parts, one plate each, with 0.2 mm layers, 5 mm brim, and enough wall loops for solid bars (also inside the page's Export zip; CLI: `--no-3mf` to skip)
 - `wall_template.svg` — print at 100 %, tape level on the wall, drill the crosses
 - `layout.svg`, `README.txt` — assembly map and steps
 

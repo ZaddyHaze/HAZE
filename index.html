@@ -161,7 +161,7 @@ td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
       <div class="stats" id="stats"></div>
       <div class="warns" id="warns"></div>
       <div class="actions">
-        <button class="primary" id="exportAll" type="button">Export all tiles (.zip of STLs)</button>
+        <button class="primary" id="exportAll" type="button">Export all (.zip of STLs + Bambu .3mf)</button>
         <button class="secondary" id="exportOne" type="button">Export selected tile</button>
         <button class="secondary" id="exportTest" type="button">Export test kit</button>
         <span id="status"></span>
@@ -192,4 +192,5 @@ td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
   </div>
 </div>
 
+<script src="cli/bambu-3mf.js"></script>
 <script src="src/engine.js"></script>
