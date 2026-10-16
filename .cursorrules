@@ -1,0 +1,30 @@
+# Instructions for AI coding agents (Cursor, Claude Code, etc.)
+
+Read `docs/DESIGN.md` first. It explains the coordinate system, every mechanism and its numbers, and the invariants.
+
+## Project layout
+- `src/engine.js` — all geometry + the page's UI logic. A plain browser script (no build step, no modules). The page loads it with `<script src>`; the CLI and tests load it into a Node `vm` with a fake DOM (`cli/load-engine.js`).
+- `index.html` — the app: controls (their `value`/`checked` attributes are the defaults), styles, preview canvas.
+- `cli/generate.js` — headless export to a folder of STLs/SVGs.
+- `test/` — `node --test` suite. Monte-Carlo 3D collision checks plus mechanism checks.
+
+## Rules
+1. **Run `npm test` after every geometry change.** All tests must pass. If you add a mechanism, add a test for its invariant.
+2. **No glue, ever.** Every joint must hold mechanically (snap, lap teeth, pegs). Don't propose adhesives.
+3. **Every tile must stay removable from the front** in the default mode (zigzag seams + wall pegs).
+4. **Nothing needs supports.** If a new feature would overhang in the exported orientation, change the orientation or split the part (that's why floating-frame feet are separate standoffs).
+5. **Clip to territory.** Geometry added to a tile must be clipped to that tile's own cell polygons (see `addBar`, `pushPiece`, hub loop).
+6. **Fit clearance `fc` comes off male parts only.** Holes/sockets stay nominal.
+7. **Snap geometry comes from `SNAP(P)`.** Don't hard-code barb sizes elsewhere.
+8. Keep `engine.js` a single classic script (it's spliced into a single-file web page). No `import`/`export`, no npm runtime dependencies. JSZip is loaded from cdnjs in `index.html`.
+9. A new control needs: an input in `index.html` (with its default), an entry in the `ids` array, a field in `readParams()`, a warning in `render()` if it can be set to something unprintable, and a line in `readme()` if it changes assembly.
+10. Original design: don't copy geometry, names or text from Paper View's "Large Kumiko Frame Generator" or any other third-party kumiko kit.
+
+## Commands
+```
+npm test                       # full suite (~2 min)
+npm run generate               # defaults → out/
+node cli/generate.js --set flt=20 --set b=18 --set cove=true --out out/led
+npm run test-kit               # fit coupons → out/test-kit
+npm run serve                  # open http://localhost:8080
+```

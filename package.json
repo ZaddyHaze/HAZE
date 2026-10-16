@@ -1,0 +1,14 @@
+{
+  "name": "kumiko-panel",
+  "version": "0.13.0",
+  "private": true,
+  "description": "Modular 3D-printed kumiko lattice wall panels: tiles snap into a wall-mounted frame, glue-free, sized for a 256 x 256 mm bed.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "generate": "node cli/generate.js",
+    "test-kit": "node cli/generate.js --test-kit --out out/test-kit",
+    "test": "node --test test/*.test.js",
+    "serve": "npx --yes http-server -c-1 -p 8080 ."
+  },
+  "engines": { "node": ">=18" }
+}
