@@ -48,6 +48,7 @@ See `docs/DESIGN.md` for how every part works, and `AGENTS.md` for rules when ed
 - `puck_shims_…stl` — slotted shims (0.4 / 0.8 / 1.2 mm) to level tiles on uneven walls
 - `living_lattice_WxH.3mf` — Bambu Studio project: 0.2 mm layers, 4 walls, mouse-ear brim on tiles/frame, no brim on hardware (also in the page Export zip; CLI: `--no-3mf` to skip)
 - `wall_template.svg` — print at 100 %, tape level on the wall, drill the crosses
+- `wall_template_letter_pages.pdf` (CLI) / `.html` (web) — same template sliced onto US Letter landscape pages with 15 mm overlap
 - `layout.svg`, `README.txt` — assembly map and steps
 
 ## License

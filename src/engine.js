@@ -1084,7 +1084,8 @@ async function exportZip(list,label){
     if(model.P.fm){
       const ids=new Set(list.map(t=>model.tiles.indexOf(t))), n=model.sockets.filter(k=>ids.has(k.tile)).length;
       if(model.P.wall&&n){add(`wall_pucks_x${n}`, puckTris(n,P)); add(`puck_shims_${shimCount(n)}_each_0.4-0.8-1.2mm`, shimTris(P,n));}
-      zip.file("wall_template.svg", pegTemplateSVG());
+      {const svg=pegTemplateSVG(); zip.file("wall_template.svg", svg);
+        if(typeof LetterPages!=="undefined") zip.file("wall_template_letter_pages.html", LetterPages.buildPrintHtml(svg,{W:P.W,H:P.H}));}
       {const nf=allFeet().filter(f=>f.boxes).length; if(nf) add(`frame_standoffs_x${nf}`, standoffTris(P));}
     }
     if(list.length===model.tiles.length&&model.P.mount){const n=model.borders.filter(b=>b.hook).length; if(n){add(`wall_cleats_x${n}`, cleatTris(n,P)); add(`cleat_hooks_x${n}`, hookTris(P)); zip.file("wall_template.svg", wallTemplateSVG());}}

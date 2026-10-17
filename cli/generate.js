@@ -15,6 +15,7 @@ const {
   latticeObjectSettings,
   latticeProjectOverrides,
 } = require("./bambu-3mf");
+const { writeLetterPages } = require("./letter-pages");
 
 const args = process.argv.slice(2);
 const overrides = {};
@@ -61,7 +62,13 @@ if (P.fm) {
     addPart(`wall_pucks_x${m.sockets.length}`, E.puckTris(m.sockets.length, P));
     addPart(`puck_shims_${E.shimCount(m.sockets.length)}_each_0.4-0.8-1.2mm`, E.shimTris(P, m.sockets.length));
   }
-  write("wall_template.svg", E.pegTemplateSVG());
+  {
+    const svg = E.pegTemplateSVG();
+    write("wall_template.svg", svg);
+    const pages = writeLetterPages(out, svg, { W: P.W, H: P.H });
+    if (pages.pdf) console.log(`  ${path.basename(pages.pdf)}  (${pages.pages} letter pages)`);
+    else console.log(`  ${path.basename(pages.html)}  (${pages.pages} letter pages; open in browser → Print → PDF)`);
+  }
   const nf = E.allFeet().filter(f => f.boxes).length;
   if (nf) addPart(`frame_standoffs_x${nf}`, E.standoffTris(P));
 }

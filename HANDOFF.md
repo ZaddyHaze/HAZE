@@ -16,6 +16,7 @@ Brand: **Living Lattice**, designed by Travis Hergenreder. Start with `AGENTS.md
 
 ## Next tasks, in order
 1. ~~**3MF export**~~ **done** — CLI + web Export zip write `living_lattice_WxH.3mf` (`cli/bambu-3mf.js`): 0.2 mm layers, 4 walls, mouse-ear brim on tiles/frame, no brim on hardware, supports off, X-Y hole/contour compensation 0. Skip with `--no-3mf`.
+1b. ~~**Letter-page wall template**~~ **done** — CLI writes `wall_template_letter_pages.pdf` (Chrome); web zip includes the print HTML. 15 mm overlap, US Letter landscape.
 2. **Hub dots**: the hubs over the pucks show as round dots on the front (most visible on the square grid). Either place sockets only at vertices where the lattice is already dense, or make the hubs a deliberate design detail.
 3. **Density zones**: large and small cells in one frame, 2:1 ratio only, so lines carry through.
 4. **Inward-facing LED channel** (second cove option), parked by Travis.

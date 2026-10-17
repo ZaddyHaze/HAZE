@@ -7,6 +7,8 @@ Read `docs/DESIGN.md` first. It explains the coordinate system, every mechanism 
 - `index.html` — the app: controls (their `value`/`checked` attributes are the defaults), styles, preview canvas.
 - `cli/generate.js` — headless export to a folder of STLs/SVGs plus a Bambu Studio `.3mf`.
 - `cli/bambu-3mf.js` — isomorphic 3MF builder (Node + browser via `globalThis.Bambu3mf`); loaded by `index.html` before `engine.js`.
+- `cli/letter-pages.js` — tiles `wall_template.svg` onto US Letter landscape pages (15 mm overlap); CLI prints PDF via Chrome, web zip includes the HTML.
+- `examples/living-lattice-accent/` — sample 460×240 asanoha export (STLs + `.3mf` + letter-page wall template).
 - `test/` — `node --test` suite. Monte-Carlo 3D collision checks plus mechanism checks.
 
 ## Rules
