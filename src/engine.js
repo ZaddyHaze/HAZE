@@ -10,7 +10,7 @@ function readParams(){
     bx:Math.max(80,n("bx")),by:Math.max(80,n("by")),mg:Math.max(0,n("mg")),
     zig:$("seam").value!=="straight",lap:$("seam").value==="lap",
     pins:$("pins").checked&&$("seam").value!=="straight",
-    sepb:$("sepb").checked&&$("seam").value!=="straight",bt:Math.max(0.6,n("bt")),mount:$("mount").value==="cleat"&&$("sepb").checked&&$("seam").value!=="straight",wall:$("mount").value==="pegs"&&$("seam").value!=="straight",pin:Math.max(1.5,n("pd")),hub:Math.max(4,n("hd")),fc:Math.min(0.5,Math.max(0,n("fc"))),snap:$("snap").checked,flt:Math.max(0,+$("flt").value||0),cove:$("cove").checked,lw:Math.min(16,Math.max(4,+$("lw").value||10)),
+    sepb:$("sepb").checked&&$("seam").value!=="straight",bt:Math.max(0.6,n("bt")),mount:$("mount").value==="cleat"&&$("sepb").checked&&$("seam").value!=="straight",wall:$("mount").value==="pegs"&&$("seam").value!=="straight",fm:($("mount").value==="pegs"||$("mount").value==="frame")&&$("sepb").checked&&$("seam").value!=="straight",pin:Math.max(1.5,n("pd")),hub:Math.max(4,n("hd")),fc:Math.min(0.5,Math.max(0,n("fc"))),snap:$("snap").checked,flt:Math.max(0,+$("flt").value||0),cove:$("cove").checked,lw:Math.min(16,Math.max(4,+$("lw").value||10)),
     plates:$("plates").checked&&$("seam").value==="straight",pt:Math.max(.8,n("pt")),pl:Math.max(15,n("pl"))};
 }
 const isTri=p=>["asanoha","kikko","mitsukude","sankaku"].includes(p);
@@ -232,7 +232,7 @@ function makeTiles(P,L,Lt){
         for(const v of cand){ if(picks.some(q=>Math.hypot(q.p[0]-v.p[0],q.p[1]-v.p[1])<Math.max(40,W0.half*2+6))) continue; const d=Math.hypot(v.p[0]-tx,v.p[1]-cy); if(d<bd){bd=d;best=v;} }
         if(best) picks.push(best);
       }
-      for(const v of picks){ pinPts.push(v.p); pinCells.push([...v.cells]); pinR.push([W0.sock/2,W0.sock/2+2.6]); sockets.push({p:v.p,tile:ti}); }
+      for(const v of picks){ pinPts.push(v.p); pinCells.push([...v.cells]); pinR.push([W0.sock/2,W0.sockRo]); sockets.push({p:v.p,tile:ti}); }
       T.sockets=picks.length;
     });
   }
@@ -400,7 +400,7 @@ function makeBorders(P,Lt,pegPts,sockets){
   const {W,H,b}=P, tri=isTri(P.pat), depth=(tri?P.cell*Math.sqrt(3)/2:P.cell)+P.gw;
   const zf0=P.gh, zf1=P.gh+P.bt;
   // floating mount: the frame is deep enough to hide a hook lip behind the lattice
-  const C=cleatDims(P), Wd=WALL(P), bh=P.mount?Math.max(P.fh,zf1+C.lipT+C.clr+2):P.wall?(P.flt>0?Wd.fd:Math.max(Wd.zw,zf1)):Math.max(P.fh,zf1);
+  const C=cleatDims(P), Wd=WALL(P), bh=Math.max(P.fh,zf1), zwC=Math.max(P.fh,zf1+C.lipT+C.clr+2);
   const ex=P.bx-2*P.mg, ey=P.by-2*P.mg, maxL=Math.max(ex,ey);
   const fits=(w,h)=>(w<=ex&&h<=ey)||(w<=ey&&h<=ex);
   const strips=[ // [name, outer rect, flange band rect, along-x?]
@@ -441,90 +441,75 @@ function makeBorders(P,Lt,pegPts,sockets){
           boxes.push(...snapPegBoxes(q[0],q[1],rp,P,SNAP(P).z0,zf0,zf1)); pegs++; myPegs.push(q);
         }
       }
-      // hidden feet (wall-peg mode): the frame mounts to the wall on its own, behind the outer tiles.
-      // Float = 0: feet are part of the frame; pop out an outer tile and screw through the foot.
-      // Float > 0: the frame stops short of the wall (LED gap). Feet print separately as standoffs: screw them
-      // to the wall, then the frame snaps onto them with the same barb latch as the tiles. The screw sits inside
-      // the standoff, under the frame, so nothing shows.
-      if(P.wall&&F[2]>F[0]&&F[3]>F[1]){
-        const CV=COVE(P), outIn=CV.on?CV.off+CV.gW+0.5:1, pegOff=CV.on?(CV.off+CV.gW+b)/2:b/2;
-        const R0=Wd.footR, cin=b+Wd.footIn, along=ax?[F[0]+R0+0.5,F[2]-R0-0.5]:[F[1]+R0+0.5,F[3]-R0-0.5];
-        const L0=along[1]-along[0], targets=L0<=0?[]:(L0>110?[along[0]+L0*0.2,along[1]-L0*0.2]:[(along[0]+along[1])/2]);
-        const footAt=s=>{
-          const c=nm==="T"?[s,H-cin]:nm==="B"?[s,cin]:nm==="L"?[cin,s]:[W-cin,s];
-          const rect=nm==="T"?[s-R0,H-cin-R0,s+R0,H-outIn]:nm==="B"?[s-R0,outIn,s+R0,cin+R0]:nm==="L"?[outIn,s-R0,cin+R0,s+R0]:[W-cin-R0,s-R0,W-outIn,s+R0];
-          const pegs=[-4,4].map(d=>nm==="T"?[s+d,H-pegOff]:nm==="B"?[s+d,pegOff]:nm==="L"?[pegOff,s+d]:[W-pegOff,s+d]);
-          return {c,rect,pegs};
-        };
-        const hitsRect=(r,q)=>!(r[2]<q[0]||q[2]<r[0]||r[3]<q[1]||q[3]<r[1]);
-        const ok=f=>sockets.every(k=>!hitsRect(f.rect,[k.p[0]-19,k.p[1]-13,k.p[0]+19,k.p[1]+13]))&&myPegs.every(q=>!hitsRect(f.rect,[q[0]-P.hub/2-1,q[1]-P.hub/2-1,q[0]+P.hub/2+1,q[1]+P.hub/2+1]))&&feet.every(g=>Math.hypot(g.c[0]-f.c[0],g.c[1]-f.c[1])>2*R0+4);
-        for(const t of targets){
-          for(let d=0;d<=80;d+=2){let done=false;
-            for(const s of d?[t+d,t-d]:[t]){ if(s<along[0]||s>along[1]) continue; const f=footAt(s); if(!ok(f)) continue;
-              feet.push(f); done=true; break;}
-            if(done) break;}
-        }
-        const cbH=Wd.cb/2+0.3, hH=Wd.hole/2+0.1;
-        for(const f of feet){
-          const [cx,cy]=f.c, sqC=[cx-cbH,cy-cbH,cx+cbH,cy+cbH], sqH=[cx-hH,cy-hH,cx+hH,cy+hH];
-          if(!(P.flt>0)){
-            // integral foot: open the screw column through the backing lattice, then build the block to the wall
-            for(let bi=boxes.length-1;bi>=1;bi--){const bx=boxes[bi]; if(bx.kind!=="f") continue; const parts=polyMinusSq(bx.pts,sqC); boxes.splice(bi,1,...parts.map(pts=>({pts,z0:bx.z0,z:bx.z,kind:"f"})));}
-            for(const r of rectMinus(f.rect,sqC)) boxes.push({pts:ccwRect(r),z0:zf0,z:zf0+Wd.cbD,kind:"ft"});
-            for(const r of rectMinus(f.rect,sqH)) boxes.push({pts:ccwRect(r),z0:zf0+Wd.cbD,z:Wd.zw,kind:"ft"});
-          } else {
-            // standoff: block from the frame back (bh) to the wall, counterbore at its top, two snap pegs up into the frame bar
-            const fb=[], S=SNAP(P), cF=1, rp=(P.pin-P.fc)/2, tip=cF+0.3;
-            for(const r of rectMinus(f.rect,sqC)) fb.push({pts:ccwRect(r),z0:bh,z:bh+Wd.cbD,kind:"so"});
-            for(const r of rectMinus(f.rect,sqH)) fb.push({pts:ccwRect(r),z0:bh+Wd.cbD,z:Wd.zw,kind:"so"});
-            for(const q of f.pegs){
-              const [x,y]=q;
-              if(S.on){
-                fb.push({pts:ccwRect([x-rp,y-rp,x-S.s/2,y+rp]),z0:tip,z:bh,kind:"sp"},{pts:ccwRect([x+S.s/2,y-rp,x+rp,y+rp]),z0:tip,z:bh,kind:"sp"});
-                fb.push({pts:ccwRect([x-rp-S.bd,y-rp,x-S.s/2,y+rp]),z0:tip,z:tip+S.bh,kind:"sp"},{pts:ccwRect([x+S.s/2,y-rp,x+rp+S.bd,y+rp]),z0:tip,z:tip+S.bh,kind:"sp"});
-              } else fb.push({pts:ccwRect([x-rp,y-rp,x+rp,y+rp]),z0:tip,z:bh,kind:"sp"});
-            }
-            f.boxes=fb;
-          }
-        }
-        const pegsIn=P.flt>0?feet.flatMap(f=>f.pegs):[];
-        if(pegsIn.length||CV.on){
-          // frame bar, rebuilt in layers: snap sockets for the standoff pegs (blind from the back, undercut near
-          // the front cap) and the LED cove (open to the wall, running the full length and turning the corners)
-          const S=SNAP(P), cF=1, ri=P.pin/2, ru=S.on?(P.pin-P.fc)/2+S.bd+0.1:ri, uz=S.on?cF+0.3+S.bh+0.1:cF;
-          const grooves=[];
-          if(CV.on){
-            const o=CV.off, g=CV.gW;
-            if(nm==="T"){grooves.push([R[0],H-o-g,R[2],H-o]); if(lo<1)grooves.push([o,H-b,o+g,H-o]); if(hi>W-1)grooves.push([W-o-g,H-b,W-o,H-o]);}
-            if(nm==="B"){grooves.push([R[0],o,R[2],o+g]); if(lo<1)grooves.push([o,o,o+g,b]); if(hi>W-1)grooves.push([W-o-g,o,W-o,b]);}
-            if(nm==="L") grooves.push([o,R[1],o+g,R[3]]);
-            if(nm==="R") grooves.push([W-o-g,R[1],W-o,R[3]]);
-          }
-          const zg=bh-CV.gD, zs=[...new Set([0,cF,uz,CV.on?zg:bh,bh].filter(z=>z>=0&&z<=bh))].sort((a,b)=>a-b);
-          const RR=[R[0],R[1],R[2],R[3]], layers=[];
-          for(let i=0;i+1<zs.length;i++){
-            const z0=zs[i], z1=zs[i+1], zm=(z0+z1)/2; if(z1-z0<1e-6) continue;
-            let L=[RR];
-            const h=zm<cF?0:zm<uz?ru:ri;
-            if(h) for(const q of pegsIn){const sq=[q[0]-h,q[1]-h,q[0]+h,q[1]+h];L=L.flatMap(r=>rectMinus(r,sq));}
-            if(CV.on&&zm>zg) for(const gq of grooves) L=L.flatMap(r=>rectMinus(r,gq));
-            for(const r of L) layers.push({pts:ccwRect(r),z0,z:z1,kind:"r"});
-          }
-          boxes.splice(0,1,...layers);
+      // Wall connections are separate snap-on parts, hidden behind the frame bar, so the frame itself always
+      // prints flat. Wall pegs: standoffs (screwed to the wall first; the screw head sits in a pocket in the
+      // frame's back). Cleat: hook blocks with a lip that drops behind the wall cleat.
+      const CV=COVE(P), S=SNAP(P), cF=1, tip=cF+0.3, rpS=(P.pin-P.fc)/2, pegOff=CV.on?(CV.off+CV.gW+b)/2:b/2, scrOff=CV.on?CV.off+CV.gW/2:b/2;
+      const snapPegsSq=(x,y,zTop,out,kind)=>{ // square split pegs pointing toward the panel face, tip at z = tip
+        if(S.on){
+          out.push({pts:ccwRect([x-rpS,y-rpS,x-S.s/2,y+rpS]),z0:tip,z:zTop,kind},{pts:ccwRect([x+S.s/2,y-rpS,x+rpS,y+rpS]),z0:tip,z:zTop,kind});
+          out.push({pts:ccwRect([x-rpS-S.bd,y-rpS,x-S.s/2,y+rpS]),z0:tip,z:tip+S.bh,kind},{pts:ccwRect([x+S.s/2,y-rpS,x+rpS+S.bd,y+rpS]),z0:tip,z:tip+S.bh,kind});
+        } else out.push({pts:ccwRect([x-rpS,y-rpS,x+rpS,y+rpS]),z0:tip,z:zTop,kind});
+      };
+      const at=(s,off)=>nm==="T"?[s,H-off]:nm==="B"?[s,off]:nm==="L"?[off,s]:[W-off,s];
+      const span=(s,h,o0,o1)=>{const a=at(s-h,o0),c=at(s+h,o1);return [Math.min(a[0],c[0]),Math.min(a[1],c[1]),Math.max(a[0],c[0]),Math.max(a[1],c[1])];};
+      const sockets2=[], pockets=[];
+      if(P.fm&&b>=8){
+        const h=Wd.soLen/2, along=[lo+h+2,hi-h-2], L0=along[1]-along[0];
+        const targets=L0<0?[]:(L0>110?[along[0]+L0*0.2,along[1]-L0*0.2]:[(along[0]+along[1])/2]);
+        for(const s0 of targets){
+          const c=at(s0,scrOff), rect=span(s0,h,0.8,b-0.8), pegs=[-Wd.soPeg,Wd.soPeg].map(d=>at(s0+d,pegOff));
+          const fb=[], hH=Wd.hole/2;
+          for(const r of rectMinus(rect,[c[0]-hH,c[1]-hH,c[0]+hH,c[1]+hH])) fb.push({pts:ccwRect(r),z0:bh,z:Wd.zw,kind:"so"});
+          for(const q of pegs) snapPegsSq(q[0],q[1],bh,fb,"sp");
+          feet.push({c,rect,pegs,boxes:fb}); sockets2.push(...pegs);
+          const pk=Wd.pocket/2; pockets.push([c[0]-pk,c[1]-pk,c[0]+pk,c[1]+pk]);
         }
       }
-      // hidden hook: a lip hanging down from the top border, flush with the wall side, that drops behind a wall cleat
       let hook=null;
       if(P.mount&&nm==="T"){
         const cx=(lo+hi)/2, hw=Math.min(C.hookW/2,(hi-lo)/2-P.b-2);
-        if(hw>8){
-          boxes.push({pts:ccwRect([cx-hw,C.lipBottom(H,b),cx+hw,H-b+0.5]),z0:bh-C.lipT,z:bh,kind:"hk"});
-          hook={x:cx};
+        if(hw>10){
+          const hb=[];
+          hb.push({pts:ccwRect([cx-hw,H-b+0.8,cx+hw,H-0.8]),z0:bh,z:zwC,kind:"hk"});
+          hb.push({pts:ccwRect([cx-hw,C.lipBottom(H,b),cx+hw,H-b+0.8]),z0:zwC-C.lipT,z:zwC,kind:"hk"});
+          const pegs=[[cx-hw+6,H-b/2],[cx+hw-6,H-b/2]];
+          for(const q of pegs) snapPegsSq(q[0],q[1],bh,hb,"sp");
+          hook={x:cx,boxes:hb,zw:zwC}; sockets2.push(...pegs);
         }
+      }
+      if(sockets2.length||CV.on){
+        // frame bar, rebuilt in layers: square snap sockets (blind from the back, undercut near the front cap),
+        // screw-head pockets over the standoffs, and the LED cove (open to the wall, turning the corners)
+        const ri=P.pin/2, ru=S.on?rpS+S.bd+0.1:ri, uz=S.on?tip+S.bh+0.1:cF;
+        const grooves=[];
+        if(CV.on){
+          const o=CV.off, g=CV.gW;
+          // T/B coves stop short of the frame's outer ends (no notch in the side); at each corner a 3.5 mm wire
+          // channel links them to the L/R coves, so every bit of the cove ceiling bridges between two walls
+          const x0g=lo<1?o:R[0], x1g=hi>W-1?W-o:R[2], wc=CV.wire/2, xl=o+g/2, xr=W-o-g/2;
+          if(nm==="T"){grooves.push([x0g,H-o-g,x1g,H-o]); if(lo<1)grooves.push([xl-wc,H-b,xl+wc,H-o-g+0.5]); if(hi>W-1)grooves.push([xr-wc,H-b,xr+wc,H-o-g+0.5]);}
+          if(nm==="B"){grooves.push([x0g,o,x1g,o+g]); if(lo<1)grooves.push([xl-wc,o+g-0.5,xl+wc,b]); if(hi>W-1)grooves.push([xr-wc,o+g-0.5,xr+wc,b]);}
+          if(nm==="L") grooves.push([o,R[1],o+g,R[3]]);
+          if(nm==="R") grooves.push([W-o-g,R[1],W-o,R[3]]);
+        }
+        const zg=bh-CV.gD, zp=bh-Wd.pocketD;
+        const zs=[...new Set([0,cF,uz,CV.on?zg:bh,pockets.length?zp:bh,bh].filter(z=>z>=0&&z<=bh))].sort((a,b)=>a-b);
+        const RR=[R[0],R[1],R[2],R[3]], layers=[];
+        for(let li=0;li+1<zs.length;li++){
+          const z0=zs[li], z1=zs[li+1], zm=(z0+z1)/2; if(z1-z0<1e-6) continue;
+          let L=[RR];
+          const hq=zm<cF?0:zm<uz?ru:ri;
+          if(hq) for(const q of sockets2){const sq=[q[0]-hq,q[1]-hq,q[0]+hq,q[1]+hq];L=L.flatMap(r=>rectMinus(r,sq));}
+          if(CV.on&&zm>zg) for(const gq of grooves) L=L.flatMap(r=>rectMinus(r,gq));
+          if(zm>zp) for(const pq of pockets) L=L.flatMap(r=>rectMinus(r,pq));
+          for(const r of L) layers.push({pts:ccwRect(r),z0,z:z1,kind:"r"});
+        }
+        boxes.splice(0,1,...layers);
       }
       let a=1e9,bb=-1e9,c=1e9,d=-1e9,vol=0;
       for(const bx of boxes){for(const q of bx.pts){a=Math.min(a,q[0]);bb=Math.max(bb,q[0]);c=Math.min(c,q[1]);d=Math.max(d,q[1]);}vol+=polyArea(bx.pts)*(bx.z-bx.z0);}
-      const bw=bb-a, bhh=d-c, topZ=Math.max(bh,...boxes.map(x=>x.z)), turn=!(bw<=ex&&bhh<=ey)&&(bhh<=ex&&bw<=ey);
+      const bw=bb-a, bhh=d-c, topZ=bh, turn=!(bw<=ex&&bhh<=ey)&&(bhh<=ex&&bw<=ey);
       pieces.push({name:`Border ${nm}${k>1?i+1:""}`,pegs,hook,feet,boxes,bx0:a,by0:c,bw,bh:bhh,top:topZ,turn,fits:(bw<=ex&&bhh<=ey)||turn,grams:vol/1000*1.24});
     }
   }
@@ -560,35 +545,40 @@ function cleatTris(n,P){
 }
 /* ---------- wall pucks: the swappable mount ---------- */
 function WALL(P){
-  // T = gap between wall and tile back (sets the float); peg goes into the tile's hidden socket
-  // zw = wall plane, measured back from the panel face. Float > 0 lifts the frame off the wall for LED backlight;
-  // hidden feet at each anchor reach back to the wall and hide the screws.
-  const cap=Math.min(1,P.gh/3), fd=Math.max(P.fh,P.gh+P.bt), zw=P.flt>0?fd+P.flt:Math.max(P.gh+5,P.fh);
-  const T=zw-P.gh, sock=8;
-  return {T,zw,fd,sock,cap,pegL:Math.max(2,P.gh-cap-0.5),w:36,h:24,half:Math.hypot(18,12),hole:4.5,cb:9,cbD:3.2,dx:11,plateT:T>5.5?5:T,footR:8,footIn:5.3};
+  // zw = wall plane, measured back from the panel face. The frame (depth fd) always prints with its backing
+  // lattice flat on the bed; it reaches the wall on separate standoffs hidden behind the frame bar.
+  // Float 0 = a 5 mm shadow gap; Float > 0 lifts the frame further for LED backlight.
+  const cap=Math.min(1,P.gh/3), fd=Math.max(P.fh,P.gh+P.bt), zw=fd+Math.max(5,P.flt||0);
+  const T=zw-P.gh, sock=10.4;
+  // round puck: fits entirely behind the tile's socket hub, so nothing shows through the lattice.
+  // One #6 pan-head screw goes down the hollow peg; the head sits on a 1.8 mm floor.
+  return {T,zw,fd,cap,sock,sockRo:sock/2+2.4,puckR:sock/2+1.8,half:sock/2+1.8,pegL:Math.max(2,P.gh-cap-0.5),hole:4.0,cb:8.0,base:1.8,
+    soLen:28,soPeg:9.5,pocket:8.0,pocketD:3.4};
+}
+function ringTris(cx,cy,ri,ro,z0,z1,out,N=32){
+  for(let k=0;k<N;k++){const a0=2*Math.PI*k/N,a1=2*Math.PI*(k+1)/N,Q=(r,a)=>[cx+r*Math.cos(a),cy+r*Math.sin(a)];
+    if(ri>0) boxTris([Q(ri,a0),Q(ro,a0),Q(ro,a1),Q(ri,a1)],z0,z1,out); else boxTris([[cx,cy],Q(ro,a0),Q(ro,a1)],z0,z1,out);}
 }
 function puckTris(n,P){
-  const Wd=WALL(P), out=[], fc=P.fc, gap=6;
-  const xs=[-18,-Wd.dx-Wd.cb/2,-Wd.dx-Wd.hole/2,-Wd.dx+Wd.hole/2,-Wd.dx+Wd.cb/2,Wd.dx-Wd.cb/2,Wd.dx-Wd.hole/2,Wd.dx+Wd.hole/2,Wd.dx+Wd.cb/2,18];
-  const ys=[-12,-Wd.cb/2,-Wd.hole/2,Wd.hole/2,Wd.cb/2,12];
-  const per=Math.max(1,Math.floor((P.bx-2*P.mg)/(Wd.w+gap)));
+  // printed wall side down: floor with the screw hole, a ring up to the tile's back, then the hollow peg
+  const Wd=WALL(P), out=[], gap=4, D=2*Wd.puckR, per=Math.max(1,Math.floor((P.bx-2*P.mg)/(D+gap)));
   for(let i=0;i<n;i++){
-    const ox=(i%per)*(Wd.w+gap)+18, oy=Math.floor(i/per)*(Wd.h+gap)+12;
-    for(let a=0;a<xs.length-1;a++)for(let b=0;b<ys.length-1;b++){
-      const x0=xs[a],x1=xs[a+1],y0=ys[b],y1=ys[b+1],cx=(x0+x1)/2,cy=(y0+y1)/2;
-      const inCb=Math.min(Math.abs(cx-Wd.dx),Math.abs(cx+Wd.dx))<Wd.cb/2&&Math.abs(cy)<Wd.cb/2;
-      const inHole=Math.min(Math.abs(cx-Wd.dx),Math.abs(cx+Wd.dx))<Wd.hole/2&&Math.abs(cy)<Wd.hole/2;
-      if(inHole) continue;
-      boxTris([[ox+x0,oy+y0],[ox+x1,oy+y0],[ox+x1,oy+y1],[ox+x0,oy+y1]],0,inCb?Wd.plateT-Wd.cbD:Wd.plateT,out);
-    }
-    if(Wd.T>Wd.plateT) boxTris([[ox-6,oy-6],[ox+6,oy-6],[ox+6,oy+6],[ox-6,oy+6]],Wd.plateT,Wd.T,out);
-    // peg, printed pointing up from the puck's front face
-    const r=(Wd.sock-fc)/2, c=[]; for(let k=0;k<32;k++){const t=2*Math.PI*k/32;c.push([ox+r*Math.cos(t),oy+r*Math.sin(t)]);}
-    boxTris(c,Wd.T,Wd.T+Wd.pegL,out);
+    const ox=(i%per)*(D+gap)+Wd.puckR, oy=Math.floor(i/per)*(D+gap)+Wd.puckR;
+    ringTris(ox,oy,Wd.hole/2,Wd.puckR,0,Wd.base,out);
+    ringTris(ox,oy,Wd.cb/2,Wd.puckR,Wd.base,Wd.T,out);
+    ringTris(ox,oy,Wd.cb/2,(Wd.sock-P.fc)/2,Wd.T,Wd.T+Wd.pegL,out);
   }
   return out;
 }
 function allFeet(){return (model.borders||[]).flatMap(b=>(b.feet||[]).map(f=>({...f,piece:b.name})));}
+function allHooks(){return (model.borders||[]).filter(b=>b.hook).map(b=>({...b.hook,piece:b.name}));}
+function hookTris(P){
+  // hook blocks print wall side down: lip and block on the bed, pegs pointing up
+  const out=[], hooks=allHooks(), gap=8; let x=0;
+  for(const h of hooks){let a=1e9,c=1e9,d=-1e9;for(const b of h.boxes)for(const q of b.pts){a=Math.min(a,q[0]);c=Math.min(c,q[1]);d=Math.max(d,q[0]);}
+    for(const b of h.boxes) boxTris(b.pts.map(q=>[q[0]-a+x,q[1]-c]),h.zw-b.z,h.zw-b.z0,out); x+=d-a+gap;}
+  return out;
+}
 function standoffTris(P){
   // each frame standoff prints wall side down; pegs point up
   const Wd=WALL(P), out=[], feet=allFeet().filter(f=>f.boxes), gap=6, ex=P.bx-2*P.mg;
@@ -602,26 +592,42 @@ function standoffTris(P){
   }
   return out;
 }
+/* ---------- puck shims: level tiles on a wavy wall ---------- */
+const SHIM_T=[0.4,0.8,1.2];
+function shimCount(n){return Math.max(4,Math.ceil(n/2));}
+function shimTris(P,nPucks,perOverride){
+  // same round footprint as a puck; a slot runs from the edge to the screw so a shim slides in behind a puck
+  // after loosening its screw. Notches opposite the slot mark thickness: 1 = 0.4, 2 = 0.8, 3 = 1.2 mm.
+  const Wd=WALL(P), out=[], per=perOverride||shimCount(nPucks), gap=4, R=Wd.puckR, D=2*R, ex=P.bx-2*P.mg, cols=Math.max(1,Math.floor((ex+gap)/(D+gap)));
+  let k=0;
+  SHIM_T.forEach((t,ti)=>{for(let i=0;i<per;i++,k++){
+    const ox=(k%cols)*(D+gap)+R, oy=Math.floor(k/cols)*(D+gap)+R, sw=Wd.hole/2+0.4;
+    let L=[circ(ox,oy,R,32)];
+    const cuts=[[ox-sw,oy-R-1,ox+sw,oy+sw]];
+    for(let j=0;j<=ti;j++) cuts.push([ox-3.5+j*2.6,oy+R-1.4,ox-2.3+j*2.6,oy+R+1]);
+    for(const c of cuts) L=L.flatMap(pp=>polyMinusSq(pp,c));
+    for(const pp of L) boxTris(pp,0,t,out);
+  }});
+  return out;
+}
 function pegTemplateSVG(){
   const {P,tiles,sockets}=model, Wd=WALL(P), m=20;
-  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${P.W+2*m} ${P.H+2*m+30}" width="${P.W+2*m}mm" height="${P.H+2*m+30}mm"><rect x="${-m}" y="${-m}" width="${P.W+2*m}" height="${P.H+2*m+30}" fill="#fff"/>`;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${P.W+2*m} ${P.H+2*m+40}" width="${P.W+2*m}mm" height="${P.H+2*m+40}mm"><rect x="${-m}" y="${-m}" width="${P.W+2*m}" height="${P.H+2*m+40}" fill="#fff"/>`;
   s+=`<rect x="0" y="0" width="${P.W}" height="${P.H}" fill="none" stroke="#888" stroke-dasharray="6 4"/>`;
   s+=`<text x="${P.W/2}" y="-6" font-family="sans-serif" font-size="8" text-anchor="middle">Top edge of panel — level this line</text>`;
+  const cross=(x,y,c)=>`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.2" fill="${c}"/><line x1="${x-5}" y1="${y}" x2="${x+5}" y2="${y}" stroke="${c}" stroke-width="0.3"/><line x1="${x}" y1="${y-5}" x2="${x}" y2="${y+5}" stroke="${c}" stroke-width="0.3"/>`;
   for(const k of sockets){
     const cx=k.p[0], cy=P.H-k.p[1];
-    s+=`<rect x="${(cx-18).toFixed(1)}" y="${(cy-12).toFixed(1)}" width="36" height="24" fill="none" stroke="#2F4B7C" stroke-width="0.4"/>`;
-    s+=`<text x="${cx.toFixed(1)}" y="${(cy+17).toFixed(1)}" font-family="sans-serif" font-size="4" text-anchor="middle">${tiles[k.tile].name}</text>`;
-    for(const dx of [-Wd.dx,Wd.dx]){const x=cx+dx;
-      s+=`<circle cx="${x.toFixed(1)}" cy="${cy.toFixed(1)}" r="1.2" fill="#C00"/><line x1="${x-5}" y1="${cy}" x2="${x+5}" y2="${cy}" stroke="#C00" stroke-width="0.3"/><line x1="${x}" y1="${cy-5}" x2="${x}" y2="${cy+5}" stroke="#C00" stroke-width="0.3"/>`;}
+    s+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${Wd.puckR}" fill="none" stroke="#2F4B7C" stroke-width="0.4"/>`;
+    s+=`<text x="${cx.toFixed(1)}" y="${(cy+Wd.puckR+6).toFixed(1)}" font-family="sans-serif" font-size="4" text-anchor="middle">${tiles[k.tile].name}</text>`+cross(cx,cy,"#C00");
   }
   for(const f of allFeet()){
-    const [cx,cy0]=f.c, cy=P.H-cy0, r=f.rect;
-    s+=`<rect x="${r[0].toFixed(1)}" y="${(P.H-r[3]).toFixed(1)}" width="${(r[2]-r[0]).toFixed(1)}" height="${(r[3]-r[1]).toFixed(1)}" fill="none" stroke="#B45F06" stroke-width="0.4"/>`;
-    s+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="1.2" fill="#B45F06"/><line x1="${cx-5}" y1="${cy}" x2="${cx+5}" y2="${cy}" stroke="#B45F06" stroke-width="0.3"/><line x1="${cx}" y1="${cy-5}" x2="${cx}" y2="${cy+5}" stroke="#B45F06" stroke-width="0.3"/>`;
+    const r=f.rect;
+    s+=`<rect x="${r[0].toFixed(1)}" y="${(P.H-r[3]).toFixed(1)}" width="${(r[2]-r[0]).toFixed(1)}" height="${(r[3]-r[1]).toFixed(1)}" fill="none" stroke="#B45F06" stroke-width="0.4"/>`+cross(f.c[0],P.H-f.c[1],"#B45F06");
   }
   const nf=allFeet().length;
-  s+=`<text x="0" y="${P.H+16}" font-family="sans-serif" font-size="6">Print at 100% (actual size). Red crosses: drill, then screw a tile puck over each blue box, peg pointing out.</text>`;
-  if(nf) s+=`<text x="0" y="${P.H+25}" font-family="sans-serif" font-size="6">Orange crosses (${nf}): frame screws. ${P.flt>0?"Screw a frame standoff over each orange box first, pegs pointing out.":"Drill now; drive the screws through the frame's hidden feet after the frame is up."}</text>`;
+  s+=`<text x="0" y="${P.H+16}" font-family="sans-serif" font-size="6">Print at 100% (actual size). Red crosses: drill, then screw a round tile puck over each blue circle, peg pointing out.</text>`;
+  if(nf) s+=`<text x="0" y="${P.H+25}" font-family="sans-serif" font-size="6">Orange crosses (${nf}): frame standoffs. Screw one over each orange box (long side along the frame edge), pegs pointing out.</text>`;
   return s+"</svg>";
 }
 
@@ -708,7 +714,7 @@ function testKit(P){
   }
   // wall socket tester: four tile sockets and four pucks, one per fit
   if(P.wall){
-    const Wd=WALL(P), ri=Wd.sock/2, ro=ri+2.6, ht=[], N=32;
+    const Wd=WALL(P), ri=Wd.sock/2, ro=Wd.sockRo, ht=[], N=32;
     TEST_FITS.forEach((fc,i)=>{
       const cx=ro+2+i*(2*ro+6), cy=ro;
       for(let k=0;k<N;k++){const a0=2*Math.PI*k/N,a1=2*Math.PI*(k+1)/N,Q=(r,a)=>[cx+r*Math.cos(a),cy+r*Math.sin(a)];
@@ -719,10 +725,33 @@ function testKit(P){
     files["test_wall_sockets.stl"]=stl(ht,"wall sockets");
     const pk=[];
     TEST_FITS.forEach((fc,i)=>{ const one=puckTris(1,{...P,fc}); const ox=i*42; for(const [a,b2,c] of one) pk.push([[a[0]+ox,a[1],a[2]],[b2[0]+ox,b2[1],b2[2]],[c[0]+ox,c[1],c[2]]]);
-      for(const d of dots(i+1,ox+4,3,Wd.plateT,Wd.plateT+0.8)) boxTris(d.pts,d.z0,d.z,pk); });
+      boxTris(ccwRect([ox+2,2*Wd.puckR-1.5,ox+2*Wd.puckR-2,2*Wd.puckR+3.5]),0,0.6,pk); for(const d of dots(i+1,ox+3.5,2*Wd.puckR+1.5,0.6,1.4)) boxTris(d.pts,d.z0,d.z,pk); });
     files["test_wall_pucks.stl"]=stl(pk,"wall pucks");
+    // frame-to-standoff snap: a short piece of frame bar with two square sockets, and a mini standoff with two snap pegs
+    {const S=SNAP(P), fd=Wd.fd, cF=1, tip=cF+0.3, uz=cF+0.3+S.bh+0.1, ri=P.pin/2, BW=16, BL=24, H0=6, fb=[], so=[];
+      TEST_FITS.forEach((fc,i)=>{
+        const ox=i*(BW+6), ru=S.on?(P.pin-fc)/2+S.bd+0.1:ri, rp=(P.pin-fc)/2, pegs=[[ox+BW/2,BL/2-4],[ox+BW/2,BL/2+4]];
+        const cut=(h)=>{let L=[[ox,0,ox+BW,BL]];for(const q of pegs){L=L.flatMap(r=>rectMinus(r,[q[0]-h,q[1]-h,q[0]+h,q[1]+h]));}return L;};
+        // frame bar block, printed back side down (z' = fd - z)
+        boxTris(ccwRect([ox,0,ox+BW,BL]),fd-cF,fd,fb);
+        for(const r of cut(ru)) boxTris(ccwRect(r),fd-(S.on?uz:cF),fd-cF,fb);
+        for(const r of cut(ri)) boxTris(ccwRect(r),0,fd-(S.on?uz:cF),fb);
+        for(const d of dots(i+1,ox+2.5,BL-2.5,fd,fd+0.8)) boxTris(d.pts,d.z0,d.z,fb);
+        // standoff block, wall side down; pegs rise from its top
+        boxTris(ccwRect([ox,0,ox+BW,BL]),0,H0,so);
+        const z1=H0+(fd-tip);
+        for(const [x,y] of pegs){
+          if(S.on){
+            boxTris(ccwRect([x-rp,y-rp,x-S.s/2,y+rp]),H0,z1,so); boxTris(ccwRect([x+S.s/2,y-rp,x+rp,y+rp]),H0,z1,so);
+            boxTris(ccwRect([x-rp-S.bd,y-rp,x-S.s/2,y+rp]),z1-S.bh,z1,so); boxTris(ccwRect([x+S.s/2,y-rp,x+rp+S.bd,y+rp]),z1-S.bh,z1,so);
+          } else boxTris(ccwRect([x-rp,y-rp,x+rp,y+rp]),H0,z1,so);
+        }
+        for(const d of dots(i+1,ox+2.5,BL-2.5,H0,H0+0.8)) boxTris(d.pts,d.z0,d.z,so);
+      });
+      files["test_frame_sockets.stl"]=stl(fb,"frame sockets"); files["test_standoffs.stl"]=stl(so,"standoffs");}
+    files["test_puck_shims.stl"]=stl(shimTris(P,1,1),"shims");
   }
-  files["TEST_KIT_README.txt"]=`TEST KIT — print these before a full frame (one plate, under an hour, about 15 g).
+  files["TEST_KIT_README.txt"]=`TEST KIT — print these before a full frame (one or two plates, about an hour, under 30 g).
 
 Dots mark the fit clearance: 1 dot = 0.05 mm, 2 = 0.10, 3 = 0.15, 4 = 0.20. Pick the best one and set Fit clearance to that value.
 
@@ -734,7 +763,11 @@ Dots mark the fit clearance: 1 dot = 0.05 mm, 2 = 0.10, 3 = 0.15, 4 = 0.20. Pick
    Push each peg into the hub with the same number of dots. Best fit: snug, goes in by hand, doesn't drop out upside down.
 3. Wall pucks (test_wall_pucks.stl + test_wall_sockets.stl), if you use the swappable wall mount
    Push each socket onto the puck peg with the same dots. Best fit: slides on by hand, holds its weight upside down, pulls off without tools.
-4. Wall cleat (test_cleat.stl + test_hook.stl), if you use the hidden cleat
+4. Floating frame (test_frame_sockets.stl + test_standoffs.stl), if you float the frame for LED backlighting
+   Press each standoff's two pegs into the frame block with the same dots until they click. Best fit: a clear click, no wobble, and it pulls off with a firm tug (the frame needs to come off the wall without tools).
+   If the pegs crack, raise Peg diameter to 4 mm or print in PETG.
+5. Puck shims (test_puck_shims.stl): one each of 0.4, 0.8 and 1.2 mm (1, 2 and 3 notches). Check they slide behind a test puck around two loosened screws.
+6. Wall cleat (test_cleat.stl + test_hook.stl), if you use the hidden cleat
    Hold the cleat flat on a table, lip up. Lower the hook block onto it: the hook should drop behind the lip with a little play, and lift out only by raising it about 8 mm first.
 
 Print settings: same as the frame — 0.2 mm layers, 0.4 nozzle, PLA or PETG. Bases face down, everything else as exported (already oriented).
@@ -776,8 +809,8 @@ function polyMinusSq(pts,H){
 /* ---------- LED cove: a channel in the back of the frame bar; the strip sits in it facing the wall ---------- */
 function COVE(P){
   const off=1.6, gW=P.lw+0.6, gD=3, ru=P.pin/2+0.35, need=off+gW+2*(ru+1.0), fd=Math.max(P.fh,P.gh+P.bt);
-  const want=P.cove&&P.wall&&P.sepb&&P.flt>0;
-  return {want,on:want&&P.b>=need&&fd-gD>=3,off,gW,gD,need,depthNeed:gD+3};
+  const want=P.cove&&P.fm&&P.flt>0;
+  return {want,on:want&&P.b>=need&&fd-gD>=3,off,gW,gD,need,depthNeed:gD+3,wire:3.5};
 }
 /* ---------- snap pegs: same click-lock as the lap teeth (0.25 mm barb, 0.6 mm tall) ---------- */
 function SNAP(P){const cap=Math.min(1,P.gh/3); return {on:P.snap&&P.pin>=2.5&&P.gh-cap>=3,bd:0.25,bh:0.6,s:0.8,cap,z0:cap+0.3};}
@@ -881,11 +914,14 @@ function render(){
   }
   if(P.sepb&&P.pins&&P.snap&&!SNAP(P).on) W.push("Snap pegs need pegs of at least 2.5 mm and grid bars at least "+(3+Math.min(1,P.gh/3)).toFixed(1)+" mm tall, so the frame pegs are plain press-fit.");
   if(P.sepb&&SNAP(P).on&&P.hub<P.pin+2.4) W.push("The snap undercut leaves the hub wall thin. Use a hub at least 2.4 mm bigger than the peg.");
-  if(P.wall&&model.borders.length&&model.borders.some(b=>!(b.feet||[]).length)) W.push("Some frame pieces got no wall feet (no room clear of the tile pucks). They'll hang only from the tiles. Try a larger cell size or fewer tiles.");
-  if(P.flt>0&&P.wall&&P.b<2*(P.pin/2+SNAP(P).bd+0.1)+3) W.push(`A floating frame snaps onto its standoffs through pegs in the border bar. Use a border of at least ${(2*(P.pin/2+0.35)+3).toFixed(1)} mm.`);
-  if(P.flt>0&&!P.wall) W.push("Float off the wall only works with the Wall pegs mount. With hidden cleats the frame already hangs off the wall by its frame height.");
+  if(P.fm&&model.borders.length&&P.b<8) W.push("The frame bar is too narrow to hide its wall standoffs. Use a border of at least 8 mm.");
+  else if(P.fm&&model.borders.length&&model.borders.some(b=>!(b.feet||[]).length)) W.push("Some frame pieces are too short for a standoff, so they hang only from the tiles. Use a longer panel or fewer frame splits.");
+
+  if(P.flt>0&&!P.fm) W.push("Float off the wall needs a wall mount (Wall pegs or Frame only) and the separate frame.");
+  if($("mount").value==="frame"&&!P.fm) W.push("Frame only needs the separate frame and a zigzag or lap seam.");
+  if($("mount").value==="frame"&&P.zig&&!P.lap) W.push("Frame only holds tiles by their edges. With zigzag seams the middle tiles have nothing to hang on; use Wall pegs, or lap seams so the panel locks into one piece.");
   {const CV=COVE(P); if(CV.want&&!CV.on) W.push(P.b<CV.need?`The LED cove needs a border of at least ${CV.need.toFixed(1)} mm for a ${P.lw} mm strip (cove plus room for the snap pegs). Widen the border or use a narrower strip; the cove is off for now.`:`The LED cove needs a frame at least ${CV.depthNeed} mm deep. Raise Frame height; the cove is off for now.`);
-   if(P.cove&&P.flt===0&&P.wall) W.push("The LED cove only applies when the frame floats off the wall. Set Float off wall to 15–25 mm.");}
+   if(P.cove&&P.flt===0&&P.fm) W.push("The LED cove only applies when the frame floats off the wall. Set Float off wall to 15–25 mm.");}
   if(P.flt>40) W.push(`A ${P.flt} mm float puts a lot of leverage on each standoff screw. 15–25 mm is plenty for LED strip.`);
   if(P.wall&&P.lap) W.push("Lap seams overlap, so an addition tile can only come off after its base neighbors. To swap any tile on its own, set Seam style to Zigzag.");
   if(P.wall){const few=tiles.filter(t=>(t.sockets||0)<2); if(few.length) W.push(`Tile${few.length>1?"s":""} ${few.map(t=>t.name).join(", ")} got fewer than 2 sockets (not enough room clear of the border). Use a smaller cell size or a larger panel.`);}
@@ -997,18 +1033,18 @@ function readme(){
   }
   const sn=SNAP(P).on;
   if(model.borders.length) steps.push(`Frame: ${model.borders.length} separate pieces with ${model.pegs} ${sn?"snap ":""}pegs on their backing lattice. The outer tiles' hidden hub holes press onto these pegs${sn?": each peg is split with a small barb at the tip, the same click-lock as the lap teeth, so tiles snap in from the front and pop out with a firm pull":""}. Frame STLs are flipped so the backing lattice and pegs print flat on the bed.`);
-  if(P.wall){const Wd=WALL(P), feet=allFeet(), nf=feet.length;
-    steps.push(`Mark the wall: print wall_template.svg at 100% (actual size), tape it up with its top line level, and drill the red crosses (tile pucks, 2 screws each) and the ${nf} orange crosses (frame feet, 1 screw each). Use #8 pan-head screws with anchors.`);
-    const CV=COVE(P);
-    if(P.flt>0&&CV.on) steps.push(`Backlight: press a ${P.lw} mm LED strip into the cove on the back of each frame piece, LEDs facing the wall (cove is ${CV.gW.toFixed(1)} mm wide x ${CV.gD} mm deep, so the strip sits below the surface). The cove runs the full length and turns every corner, so one strip goes all the way round; bend it flat at the corners or use L-connectors. Leave a short tail at one bottom corner and run the cable out through the ${P.flt} mm gap. The light bounces off the wall: a halo around the frame and a glow through the lattice, with no strip visible. COB strip gives an even line with no dots.`);
-    if(model.borders.length&&P.flt>0) steps.push(`Frame first: screw the ${nf} frame standoffs over the orange boxes (screw through the square counterbore, pegs pointing out). Press each frame piece onto its standoffs until the pegs click. The frame now floats ${P.flt} mm off the wall; only the standoffs touch it, and each screw is buried inside its standoff under the frame.`);
-    else if(model.borders.length) steps.push(`Frame first: hold each frame piece in place and drive a screw through each of its hidden feet (${nf} in total; the square holes just inside the frame's inner edge). The heads sit below the backing lattice, behind where the outer tiles go.`);
-    steps.push(`Screw on the ${model.sockets.length} tile pucks over the blue boxes, pegs pointing out. Then press each tile in: it pushes onto its two puck pegs, and outer tiles also click onto the frame's snap pegs. Zigzag edges nest with the neighbors.`);
-    steps.push(`Swap or add later: pull any tile straight out (outer tiles release from the frame with a firm pull) and press another in. The frame stays on the wall. Tiles float ${Wd.T.toFixed(0)} mm off the wall.`);
-    if(P.flt>0&&!COVE(P).on) steps.push(`Backlight: there is a ${P.flt} mm gap behind the frame and ${Wd.T.toFixed(0)} mm behind the tiles. Stick an 8–10 mm LED strip to the wall about 25 mm inside the frame outline (behind the outer tiles), routing around pucks and standoffs. Run the cable out through the bottom gap.`);}
+  if(P.fm){const Wd=WALL(P), feet=allFeet(), nf=feet.length, CV=COVE(P);
+    steps.push(`Mark the wall: print wall_template.svg at 100% (actual size), tape it up with its top line level, and drill ${P.wall?"the red crosses (one per tile puck) and ":""}the ${nf} orange crosses (one per frame standoff). Use #6 pan-head screws with anchors.`);
+    if(P.flt>0&&CV.on) steps.push(`Backlight: press a ${P.lw} mm LED strip into the cove on the back of each frame piece, LEDs facing the wall (cove is ${CV.gW.toFixed(1)} mm wide x ${CV.gD} mm deep, so the strip sits below the surface). The cove runs the full length of every side; at each corner a small wire channel links one side to the next. Cut the strip at its marked cut points near each corner and join the pieces with a short strip-to-strip jumper wire laid in the channel. Leave a short tail at one bottom corner and run the cable out through the ${P.flt} mm gap. The light bounces off the wall: a halo around the frame and a glow through the lattice, with no strip visible. COB strip gives an even line with no dots.`);
+    if(model.borders.length) steps.push(`Frame: screw the ${nf} frame standoffs to the wall over the orange boxes, long side along the frame edge, pegs pointing out. Press each frame piece onto its standoffs until the pegs click. The standoffs sit entirely behind the frame bar and each screw head tucks into a pocket in the frame's back, so nothing shows. The frame stands ${(Wd.zw-Wd.fd).toFixed(0)} mm off the wall.`);
+    if(P.wall) steps.push(`Tiles: screw a round puck over each blue circle (the screw goes down the middle of the hollow peg). Press each tile in: it pushes onto its two puck pegs, and outer tiles also click onto the frame's snap pegs. Each puck hides completely behind the round hub on the back of its tile. Zigzag edges nest with the neighbors.`);
+    if(P.wall) steps.push(`Level the seams: lay a straightedge across each seam. If one tile sits lower than its neighbor (walls are rarely flat), loosen that puck's screw a turn, slide a shim in behind it (the slot fits around the screw), and retighten. Notches on the shims mark thickness: 1 = 0.4 mm, 2 = 0.8 mm, 3 = 1.2 mm. Stack them if needed.`);
+    if(!P.wall) steps.push(`Hang the panel: with the tiles assembled face down, lift the whole panel and press it onto the standoffs until the frame pegs click.`);
+    if(P.wall) steps.push(`Swap or add later: pull any tile straight out (outer tiles release from the frame with a firm pull) and press another in. The frame stays on the wall. Tiles float ${Wd.T.toFixed(0)} mm off the wall.`);
+    if(P.flt>0&&!CV.on) steps.push(`Backlight: there is a ${P.flt} mm gap behind the frame. Stick an LED strip to the wall about 25 mm inside the frame outline (behind the outer tiles), routing around the pucks. Run the cable out through the bottom gap.`);}
   if(P.mount){const C=cleatDims(P), n=model.borders.filter(b=>b.hook).length;
-    steps.push(`Hang it: print wall_template.svg at 100% (actual size), tape it to the wall with its top line level, and drill the ${n*2} red crosses. Screw the ${n} printed wall cleats on, open lip facing up (#8 pan-head screws with anchors). Lift the panel, hold it flat against the wall about 15 mm above its final spot, and lower it: the hidden hooks drop behind the cleat lips. The panel stands ${model.borders[0].top.toFixed(0)} mm off the wall and nothing shows.`);}
-  if(!P.wall) steps.push(P.zig?"Flip the panel carefully, supporting the middle, and hang it. Fit is set by Fit clearance: if teeth, keys or pegs are too tight, raise it 0.05 mm; if loose, lower it.":"Lightly sand the front of each seam, then finish.");
+    steps.push(`Hang it: print wall_template.svg at 100% (actual size), tape it to the wall with its top line level, and drill the ${n*2} red crosses. Screw the ${n} printed wall cleats on, open lip facing up (#8 pan-head screws with anchors). Press a hook block onto the back of each top frame piece until its pegs click. Lift the panel, hold it flat against the wall about 15 mm above its final spot, and lower it: the hidden hooks drop behind the cleat lips. The panel stands ${model.borders[0].top.toFixed(0)} mm off the wall and nothing shows.`);}
+  if(!P.fm) steps.push(P.zig?"Flip the panel carefully, supporting the middle, and hang it. Fit is set by Fit clearance: if teeth, keys or pegs are too tight, raise it 0.05 mm; if loose, lower it.":"Lightly sand the front of each seam, then finish.");
   return `KUMIKO FRAME — ${P.W} x ${P.H} mm, pattern: ${$("pat").selectedOptions[0].text}
 Cell ${P.cell} mm · grid bar ${P.gw} x ${P.gh} mm · infill bar ${P.iw} x ${P.ih} mm · border ${P.b} mm x ${P.fh} mm
 Seams: ${seamName}
@@ -1037,19 +1073,19 @@ async function exportZip(list,label){
   try{
     if(typeof JSZip==="undefined") throw {message:"The zip library didn't load. Reload the page and try again."};
     const zip=new JSZip(), {P}=model;
-    const parts3mf=[]; // same meshes go into a Bambu Studio .3mf when Bambu3mf is loaded
+    const parts3mf=[];
     const add=(name,tris)=>{ zip.file(`${name}.stl`, stl(tris,name)); parts3mf.push({name,tris}); };
     for(const t of list) add(`tile_${t.name}`, tileTris(t));
     if(list.length===model.tiles.length && model.plates.length) add("splice_plates", plateTris(model.plates,P));
     if(list.length===model.tiles.length) for(const bp of model.borders) add(bp.name.replace(" ","_").toLowerCase(), borderTris(bp));
     if(list.length===model.tiles.length && model.keys.length) add(`bowtie_keys_x${model.keys.length}`, keyTris(model.keys.length,P,model.K));
-    if(model.P.wall&&model.sockets.length){
+    if(model.P.fm){
       const ids=new Set(list.map(t=>model.tiles.indexOf(t))), n=model.sockets.filter(k=>ids.has(k.tile)).length;
-      if(n) add(`wall_pucks_x${n}`, puckTris(n,P));
+      if(model.P.wall&&n){add(`wall_pucks_x${n}`, puckTris(n,P)); add(`puck_shims_${shimCount(n)}_each_0.4-0.8-1.2mm`, shimTris(P,n));}
       zip.file("wall_template.svg", pegTemplateSVG());
       {const nf=allFeet().filter(f=>f.boxes).length; if(nf) add(`frame_standoffs_x${nf}`, standoffTris(P));}
     }
-    if(list.length===model.tiles.length&&model.P.mount){const n=model.borders.filter(b=>b.hook).length; if(n){add(`wall_cleats_x${n}`, cleatTris(n,P)); zip.file("wall_template.svg", wallTemplateSVG());}}
+    if(list.length===model.tiles.length&&model.P.mount){const n=model.borders.filter(b=>b.hook).length; if(n){add(`wall_cleats_x${n}`, cleatTris(n,P)); add(`cleat_hooks_x${n}`, hookTris(P)); zip.file("wall_template.svg", wallTemplateSVG());}}
     zip.file("layout.svg", layoutSVG()); zip.file("README.txt", readme());
     if(typeof Bambu3mf!=="undefined" && parts3mf.length){
       st.textContent="Building Bambu Studio .3mf…";

@@ -104,14 +104,14 @@ td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
         <label class="full">Mount
           <select id="mount">
             <option value="pegs">Wall pegs: swap or add tiles from the front</option>
-            <option value="cleat">Hidden cleats: hang as one panel</option>
+            <option value="frame">Frame only: hang the panel on hidden standoffs</option>
             <option value="none">None</option>
           </select>
         </label>
         <label>Float off wall (LED gap)<input type="number" id="flt" value="0" min="0" max="60" step="1"></label>
         <label>LED strip width<input type="number" id="lw" value="10" min="4" max="16" step="1"></label>
         <label class="check full"><input type="checkbox" id="cove" checked> LED cove in the back of the frame (when floating)</label>
-        <span class="hint full" style="grid-column:1/-1">Wall pegs: the frame screws to the wall on its own through hidden feet, tiles push onto screw-on wall pucks, and outer tiles click into the frame with snap pegs. Any tile pops out the front; the frame stays up. Float &gt; 0 lifts the frame off the wall on snap-on standoffs for LED backlighting (15–25 mm works well); the screws hide inside the standoffs. Hidden cleats: the whole panel hangs on hooks behind the top border.</span>
+        <span class="hint full" style="grid-column:1/-1">Wall pegs: tiles push onto round pucks hidden behind their hubs, outer tiles click into the frame, and the frame snaps onto standoffs hidden behind its bar. Any tile pops out the front. Frame only: the assembled panel (lap seams) snaps onto the hidden standoffs, so you drill fewer holes. Float 0 leaves a 5 mm shadow gap; 15–25 mm with the LED cove gives a halo backlight. Nothing needs supports and no hardware shows from the front.</span>
       </fieldset>
 
       <fieldset>
@@ -145,7 +145,7 @@ td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
         <span class="hint full" id="seamHint" style="grid-column:1/-1"></span>
         <label class="check full"><input type="checkbox" id="pins" checked> Glue-free joints (bowtie keys + border pegs)</label>
         <label class="check full"><input type="checkbox" id="snap" checked> Snap-fit teeth (click-lock front to back)</label>
-        <label>Peg diameter<input type="number" id="pd" value="3" min="1.5" step="0.5"></label>
+        <label>Peg diameter<input type="number" id="pd" value="3.5" min="1.5" step="0.5"></label>
         <label>Hub diameter<input type="number" id="hd" value="8" min="4" step="0.5"></label>
         <label class="full">Fit clearance (mm)<input type="number" id="fc" value="0.15" min="0" max="0.5" step="0.05"></label>
         <label class="check full"><input type="checkbox" id="sepb" checked> Print border separately, with backing lattice</label>

@@ -3,7 +3,7 @@
 // plus a Bambu Studio .3mf with per-object print settings (0.2 mm layers, 5 mm brim,
 // wall loops enough to print bars solid).
 //   node cli/generate.js                         -> out/ with defaults from index.html
-//   node cli/generate.js --set W=900 --set H=600 --set flt=20 --set b=18
+//   node cli/generate.js --set W=900 --set H=600 --set flt=20 --set b=19
 //   node cli/generate.js --params my-panel.json --out builds/living-room
 //   node cli/generate.js --test-kit              -> test coupons only
 //   node cli/generate.js --no-3mf                -> skip the .3mf project
@@ -47,9 +47,8 @@ if (testOnly) {
   process.exit(0);
 }
 
-const parts3mf = []; // {name, tris, obj_settings}
+const parts3mf = [];
 const objSet = latticeObjectSettings(P);
-
 function addPart(name, tris) {
   write(`${name}.stl`, E.stl(tris, name));
   if (want3mf) parts3mf.push({ name, tris, obj_settings: { ...objSet } });
@@ -59,18 +58,14 @@ for (const t of m.tiles) addPart(`tile_${t.name}`, E.tileTris(t));
 if (m.plates.length) addPart("splice_plates", E.plateTris(m.plates, P));
 for (const bp of m.borders) addPart(bp.name.replace(" ", "_").toLowerCase(), E.borderTris(bp));
 if (m.keys.length) addPart(`bowtie_keys_x${m.keys.length}`, E.keyTris(m.keys.length, P, m.K));
-if (P.wall && m.sockets.length) {
-  addPart(`wall_pucks_x${m.sockets.length}`, E.puckTris(m.sockets.length, P));
+if (P.fm) {
+  if (P.wall && m.sockets.length) {
+    addPart(`wall_pucks_x${m.sockets.length}`, E.puckTris(m.sockets.length, P));
+    addPart(`puck_shims_${E.shimCount(m.sockets.length)}_each_0.4-0.8-1.2mm`, E.shimTris(P, m.sockets.length));
+  }
   write("wall_template.svg", E.pegTemplateSVG());
   const nf = E.allFeet().filter(f => f.boxes).length;
   if (nf) addPart(`frame_standoffs_x${nf}`, E.standoffTris(P));
-}
-if (P.mount) {
-  const n = m.borders.filter(b => b.hook).length;
-  if (n) {
-    addPart(`wall_cleats_x${n}`, E.cleatTris(n, P));
-    write("wall_template.svg", E.wallTemplateSVG());
-  }
 }
 write("layout.svg", E.layoutSVG());
 write("README.txt", E.readme());

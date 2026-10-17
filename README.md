@@ -6,7 +6,7 @@ Modular 3D-printed kumiko lattice wall panels. Sized for a Bambu Lab P2S (256 ×
 Requires Node 18+. No dependencies to install.
 
 ```bash
-npm test                 # verify geometry (25 checks)
+npm test                 # verify geometry, printability and hidden hardware (66 checks)
 npm run generate         # export a panel with default settings to out/
 npm run test-kit         # export fit-test coupons to out/test-kit
 npm run serve            # run the visual builder at http://localhost:8080
@@ -14,7 +14,7 @@ npm run serve            # run the visual builder at http://localhost:8080
 
 Custom panel:
 ```bash
-node cli/generate.js --set W=900 --set H=600 --set pat=asanoha --set flt=20 --set b=18 --out out/living-room
+node cli/generate.js --set W=900 --set H=600 --set pat=asanoha --set flt=20 --set b=19 --out out/living-room
 # or put the settings in a JSON file
 node cli/generate.js --params panels/living-room.json --out out/living-room
 ```
@@ -32,10 +32,10 @@ Every export also writes `params.json`, so you can re-run it later.
 | `seam` | `zig` (swappable), `lap` (half-lap teeth), `straight` | zig |
 | `snap` | snap barbs on teeth and pegs | true |
 | `fc` | fit clearance, mm (pick from the test kit) | 0.15 |
-| `pd`, `hd` | peg / hub diameter | 3 / 8 |
+| `pd`, `hd` | peg / hub diameter | 3.5 / 8 |
 | `sepb`, `bt` | separate frame with backing lattice / its thickness | true / 1.2 |
-| `mount` | `pegs` (wall pucks, swappable), `cleat` (one-piece hang), `none` | pegs |
-| `flt` | float the frame off the wall, mm (0 = frame touches wall) | 0 |
+| `mount` | `pegs` (hidden round pucks, swappable tiles), `frame` (panel hangs on hidden frame standoffs), `none` | pegs |
+| `flt` | float the frame off the wall, mm (0 = 5 mm shadow gap) | 0 |
 | `cove`, `lw` | LED cove in frame back / strip width | true / 10 |
 | `bx`, `by`, `mg` | bed size and edge margin | 256 / 256 / 8 |
 
@@ -45,6 +45,7 @@ See `docs/DESIGN.md` for how every part works, and `AGENTS.md` for rules when ed
 - `tile_A1.stl …` — lattice tiles (face down)
 - `border_t1.stl …` — frame pieces (print as exported)
 - `wall_pucks_xN.stl`, `frame_standoffs_xN.stl` — wall hardware
+- `puck_shims_…stl` — slotted shims (0.4 / 0.8 / 1.2 mm) to level tiles on uneven walls
 - `kumiko_WxH.3mf` — Bambu Studio project: same parts, one plate each, with 0.2 mm layers, 5 mm brim, and enough wall loops for solid bars (also inside the page's Export zip; CLI: `--no-3mf` to skip)
 - `wall_template.svg` — print at 100 %, tape level on the wall, drill the crosses
 - `layout.svg`, `README.txt` — assembly map and steps

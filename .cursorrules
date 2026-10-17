@@ -13,7 +13,7 @@ Read `docs/DESIGN.md` first. It explains the coordinate system, every mechanism 
 1. **Run `npm test` after every geometry change.** All tests must pass. If you add a mechanism, add a test for its invariant.
 2. **No glue, ever.** Every joint must hold mechanically (snap, lap teeth, pegs). Don't propose adhesives.
 3. **Every tile must stay removable from the front** in the default mode (zigzag seams + wall pegs).
-4. **Nothing needs supports.** If a new feature would overhang in the exported orientation, change the orientation or split the part (that's why floating-frame feet are separate standoffs).
+4. **Nothing needs supports, nothing shows.** Every part must print without supports in its exported orientation, and no wall hardware may be visible through the lattice from the front. `test/printability.test.js` enforces both; split a part or hide it behind a hub or the frame bar rather than relaxing the test.
 5. **Clip to territory.** Geometry added to a tile must be clipped to that tile's own cell polygons (see `addBar`, `pushPiece`, hub loop).
 6. **Fit clearance `fc` comes off male parts only.** Holes/sockets stay nominal.
 7. **Snap geometry comes from `SNAP(P)`.** Don't hard-code barb sizes elsewhere.
@@ -23,9 +23,18 @@ Read `docs/DESIGN.md` first. It explains the coordinate system, every mechanism 
 
 ## Commands
 ```
-npm test                       # full suite (~2 min)
+npm test                       # full suite (~5 min)
 npm run generate               # defaults → out/
-node cli/generate.js --set flt=20 --set b=18 --set cove=true --out out/led
+node cli/generate.js --set flt=20 --set b=19 --set cove=true --out out/led
 npm run test-kit               # fit coupons → out/test-kit
 npm run serve                  # open http://localhost:8080
 ```
+
+## Expert skills in this project
+Two expert roles ship with the project. Use them whenever the work touches their area:
+- **Master craftsman & designer** — joints, materials, print orientation, proportion, design reviews. Review order: will it hold → can it be made → is it beautiful → is it a product → one fix with exact dimensions.
+- **Japanese history guru** — pattern names and meanings, kumiko and joinery history, Japanese terms (kanji + romaji), product copy that's accurate. Separate documented history from tradition; cite sources.
+
+Where they live:
+- Cursor: `.cursor/rules/master-craftsman-designer.mdc`, `.cursor/rules/japanese-history-guru.mdc` (applied by description; mention them with @ to force them on).
+- Claude Code: `.claude/skills/master-craftsman-designer/`, `.claude/skills/japanese-history-guru/`.

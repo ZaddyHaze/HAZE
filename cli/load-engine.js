@@ -58,7 +58,7 @@ function loadEngine(overrides = {}) {
   const api = vm.runInContext(`({
     get model(){return model}, build, readParams, testKit, readme, layoutSVG, stl,
     tileTris, borderTris, plateTris, keyTris, puckTris, cleatTris, standoffTris, pegTemplateSVG, wallTemplateSVG,
-    allFeet, WALL, SNAP, COVE, cleatDims
+    allFeet, WALL, SNAP, COVE, cleatDims, shimTris, shimCount
   })`, sandbox);
   api.vals = vals;
   api.rebuild = (more = {}) => { Object.assign(vals, more); api.build(); return api.model; };

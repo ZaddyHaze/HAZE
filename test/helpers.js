@@ -27,7 +27,9 @@ function assembled(E) {
   return m.tiles.map((T, i) => ({ id: "t" + i, boxes: T.boxes }))
     .concat(m.borders.map((B, i) => ({ id: "b" + i, boxes: B.boxes })))
     .concat(E.allFeet().filter(f => f.boxes).map((f, i) => ({ id: "s" + i, boxes: f.boxes })))
-    .concat(m.sockets.map((k, i) => ({ id: "p" + i, boxes: [{ pts: [[k.p[0] - 18, k.p[1] - 12], [k.p[0] + 18, k.p[1] - 12], [k.p[0] + 18, k.p[1] + 12], [k.p[0] - 18, k.p[1] + 12]], z0: m.P.gh + 0.01, z: Wd.zw }] })));
+    .concat((m.borders || []).filter(b => b.hook).map((b, i) => ({ id: "h" + i, boxes: b.hook.boxes })))
+    .concat(m.sockets.map((k, i) => ({ id: "p" + i, boxes: [{ pts: circle(k.p, Wd.puckR), z0: m.P.gh + 0.01, z: Wd.zw }] })));
 }
+function circle(c, r, N = 24) { const o = []; for (let k = 0; k < N; k++) { const a = 2 * Math.PI * k / N; o.push([c[0] + r * Math.cos(a), c[1] + r * Math.sin(a)]); } return o; }
 function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-module.exports = { inPoly, solidAt, countOverlaps, assembled };
+module.exports = { inPoly, solidAt, countOverlaps, assembled, circle };
