@@ -456,7 +456,9 @@ function makeBorders(P,Lt,pegPts,sockets){
       const sockets2=[], pockets=[];
       if(P.fm&&b>=8){
         const h=Wd.soLen/2, along=[lo+h+2,hi-h-2], L0=along[1]-along[0];
-        const targets=L0<0?[]:(L0>110?[along[0]+L0*0.2,along[1]-L0*0.2]:[(along[0]+along[1])/2]);
+        // one standoff per ~300 mm of frame (at least one per piece), evenly spaced
+        const nS=L0<0?0:Math.max(1,Math.ceil((hi-lo)/300)), targets=[];
+        for(let q=0;q<nS;q++) targets.push(nS===1?(along[0]+along[1])/2:along[0]+L0*(q+0.5)/nS);
         for(const s0 of targets){
           const c=at(s0,scrOff), rect=span(s0,h,0.8,b-0.8), pegs=[-Wd.soPeg,Wd.soPeg].map(d=>at(s0+d,pegOff));
           const fb=[], hH=Wd.hole/2;
@@ -1090,14 +1092,13 @@ async function exportZip(list,label){
     if(typeof Bambu3mf!=="undefined" && parts3mf.length){
       st.textContent="Building Bambu Studio .3mf…";
       const template=await loadBambuTemplate();
-      const objSet=Bambu3mf.latticeObjectSettings(P);
-      for(const p of parts3mf) p.obj_settings={...objSet};
+      for(const p of parts3mf) p.obj_settings=Bambu3mf.latticeObjectSettings(P, p.name);
       const proj=Bambu3mf.latticeProjectOverrides(P);
       const bed=proj._bed; delete proj._bed;
       const pack=Bambu3mf.buildBambuPackage(parts3mf, proj, {bed, template});
       const mf=new JSZip();
       for(const [n,d] of Object.entries(pack.files)) mf.file(n,d);
-      zip.file(`kumiko_${P.W}x${P.H}.3mf`, await mf.generateAsync({type:"uint8array",compression:"DEFLATE"}));
+      zip.file(`living_lattice_${P.W}x${P.H}.3mf`, await mf.generateAsync({type:"uint8array",compression:"DEFLATE"}));
     }
     const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE"});
     st.textContent="Waiting for you to confirm the save…";
@@ -1125,6 +1126,10 @@ ids.forEach(id=>$(id).addEventListener("input",()=>{
   if(id==="bx"||id==="by") $("preset").value="custom";
   queue();
 }));
+// the simple controls drive the advanced ones
+$("size").addEventListener("input",()=>{$("cell").value=$("size").value;queue();});
+$("style").addEventListener("input",()=>{const solid=$("style").value==="solid";$("styleHint").textContent=solid?"Tiles lock into one panel with half-lap teeth and hang from the frame. Fewer holes in the wall.":"Pop any tile out from the front to swap or add to the design.";$("seam").value=solid?"lap":"zig";$("mount").value=solid?"frame":"pegs";queue();});
+$("led").addEventListener("input",()=>{const on=$("led").checked, b=+$("b").value;$("flt").value=on?20:0;$("cove").checked=on;if(on&&b<19)$("b").value=19;if(!on&&b===19)$("b").value=10;queue();});
 $("tiles").addEventListener("click",e=>{const tr=e.target.closest("tr");if(!tr)return;selected=+tr.dataset.i;render();});
 $("tiles").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){const tr=e.target.closest("tr");if(!tr)return;e.preventDefault();selected=+tr.dataset.i;render();}});
 $("exportAll").addEventListener("click",()=>exportZip(model.tiles,`kumiko-frame-${model.P.W}x${model.P.H}.zip`));

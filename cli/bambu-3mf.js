@@ -100,30 +100,46 @@
     return String(name || "").replace(/[<>:"/\\|?*]/g, "-").trim();
   }
 
-  function latticeObjectSettings(P) {
-    const walls = solidWallLoops(Math.max(P.gw, P.iw));
-    return {
+  /** Tiles + frame pieces get mouse-ear brims; pucks/shims/standoffs/keys get none. */
+  function isLatticePart(name) {
+    const n = String(name || "").toLowerCase();
+    if (/^(tile_|border_|splice_)/.test(n)) return true;
+    if (/^(wall_puck|puck_shim|frame_standoff|bowtie_key|wall_cleat|cleat_hook)/.test(n)) return false;
+    // default: treat unknown printables as lattice (brim ears)
+    return true;
+  }
+
+  /**
+   * Per-object settings from HANDOFF.md:
+   * 0.2 mm layers, 4 walls, mouse-ear brim on tiles/frame, no brim on hardware,
+   * supports off, X-Y hole/contour compensation 0.
+   */
+  function latticeObjectSettings(P, partName) {
+    const brim = isLatticePart(partName)
+      ? { brim_type: "brim_ears", brim_width: "5", brim_object_gap: "0.1" }
+      : { brim_type: "no_brim", brim_width: "0" };
+    return Object.assign({
       layer_height: "0.2",
-      wall_loops: String(walls),
-      brim_type: "outer_only",
-      brim_width: "5",
-      brim_object_gap: "0.1",
+      wall_loops: "4",
       enable_support: "0",
-    };
+      xy_hole_compensation: "0",
+      xy_contour_compensation: "0",
+    }, brim);
   }
 
   function latticeProjectOverrides(P) {
-    const walls = solidWallLoops(Math.max(P.gw, P.iw));
     const bed = Math.min(Number(P.bx) || 256, Number(P.by) || 256);
     return {
       layer_height: "0.2",
       initial_layer_print_height: "0.2",
-      wall_loops: String(walls),
-      brim_type: "outer_only",
+      wall_loops: "4",
+      brim_type: "brim_ears",
       brim_width: "5",
       brim_object_gap: "0.1",
       curr_bed_type: "Textured PEI Plate",
       enable_support: "0",
+      xy_hole_compensation: "0",
+      xy_contour_compensation: "0",
       sparse_infill_density: "15%",
       printable_area: [`0x0`, `${P.bx}x0`, `${P.bx}x${P.by}`, `0x${P.by}`],
       printable_height: String(P.by),
@@ -361,6 +377,7 @@
     buildBambuPackage,
     writeBambu3mf,
     solidWallLoops,
+    isLatticePart,
     latticeObjectSettings,
     latticeProjectOverrides,
     meshFromTris,

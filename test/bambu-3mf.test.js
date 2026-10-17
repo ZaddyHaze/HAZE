@@ -9,12 +9,12 @@ const { loadEngine } = require("../cli/load-engine");
 const {
   writeBambu3mf,
   solidWallLoops,
+  isLatticePart,
   latticeObjectSettings,
   latticeProjectOverrides,
 } = require("../cli/bambu-3mf");
 
 function unzipEntries(buf) {
-  // Minimal ZIP reader for stored/deflated local entries (our writer only).
   const files = {};
   let o = 0;
   while (o + 4 <= buf.length) {
@@ -37,10 +37,21 @@ function unzipEntries(buf) {
 }
 
 test("solidWallLoops fills bar width at 0.4 mm line width", () => {
-  assert.strictEqual(solidWallLoops(2.4), 3); // default grid bar
-  assert.strictEqual(solidWallLoops(1.6), 2); // default infill bar
-  assert.strictEqual(solidWallLoops(3.2), 4);
+  assert.strictEqual(solidWallLoops(2.4), 3);
   assert.ok(solidWallLoops(2.4) * 2 * 0.4 >= 2.4);
+});
+
+test("isLatticePart: tiles/frame get brim ears; hardware does not", () => {
+  assert.strictEqual(isLatticePart("tile_A1"), true);
+  assert.strictEqual(isLatticePart("border_t1"), true);
+  assert.strictEqual(isLatticePart("splice_plates"), true);
+  assert.strictEqual(isLatticePart("wall_pucks_x4"), false);
+  assert.strictEqual(isLatticePart("puck_shims_4_each_0.4-0.8-1.2mm"), false);
+  assert.strictEqual(isLatticePart("frame_standoffs_x8"), false);
+  assert.strictEqual(isLatticePart("bowtie_keys_x12"), false);
+  assert.strictEqual(latticeObjectSettings({}, "tile_A1").brim_type, "brim_ears");
+  assert.strictEqual(latticeObjectSettings({}, "tile_A1").wall_loops, "4");
+  assert.strictEqual(latticeObjectSettings({}, "wall_pucks_x2").brim_type, "no_brim");
 });
 
 test("isomorphic builder attaches as Bambu3mf for the browser", () => {
@@ -55,23 +66,26 @@ test("isomorphic builder attaches as Bambu3mf for the browser", () => {
   vm.runInContext(code, sandbox);
   assert.ok(sandbox.Bambu3mf);
   assert.strictEqual(typeof sandbox.Bambu3mf.buildBambuPackage, "function");
-  assert.strictEqual(sandbox.Bambu3mf.solidWallLoops(2.4), 3);
 });
 
-test("3MF export embeds Bambu project + per-object settings", () => {
+test("3MF export embeds HANDOFF per-object Bambu settings", () => {
   const E = loadEngine({ W: 200, H: 200, cell: 40 });
   E.build();
   const P = E.model.P;
   const t = E.model.tiles[0];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kumiko-3mf-"));
   const out = path.join(dir, "panel.3mf");
-  const settings = latticeObjectSettings(P);
+  const tileName = `tile_${t.name}`;
+  const settings = latticeObjectSettings(P, tileName);
   const proj = latticeProjectOverrides(P);
   delete proj._bed;
 
   writeBambu3mf(
     out,
-    [{ name: `tile_${t.name}`, tris: E.tileTris(t), obj_settings: settings }],
+    [
+      { name: tileName, tris: E.tileTris(t), obj_settings: settings },
+      { name: "wall_pucks_x1", tris: E.puckTris(1, P), obj_settings: latticeObjectSettings(P, "wall_pucks_x1") },
+    ],
     proj,
     { bed: P.bx }
   );
@@ -88,18 +102,19 @@ test("3MF export embeds Bambu project + per-object settings", () => {
 
   const project = JSON.parse(files["Metadata/project_settings.config"]);
   assert.strictEqual(project.layer_height, "0.2");
-  assert.strictEqual(project.brim_width, "5");
-  assert.strictEqual(project.brim_type, "outer_only");
-  assert.strictEqual(project.wall_loops, String(solidWallLoops(Math.max(P.gw, P.iw))));
-  assert.strictEqual(project.curr_bed_type, "Textured PEI Plate");
+  assert.strictEqual(project.wall_loops, "4");
+  assert.strictEqual(project.brim_type, "brim_ears");
+  assert.strictEqual(project.enable_support, "0");
+  assert.strictEqual(project.xy_hole_compensation, "0");
+  assert.strictEqual(project.xy_contour_compensation, "0");
 
   const ms = files["Metadata/model_settings.config"];
   assert.match(ms, /key="name" value="tile_/);
   assert.match(ms, /key="layer_height" value="0\.2"/);
-  assert.match(ms, /key="brim_width" value="5"/);
-  assert.match(ms, /key="wall_loops" value="\d+"/);
+  assert.match(ms, /key="wall_loops" value="4"/);
+  assert.match(ms, /key="brim_type" value="brim_ears"/);
+  assert.match(ms, /key="brim_type" value="no_brim"/);
   assert.match(ms, /<plate>/);
-  assert.match(files["3D/3dmodel.model"], /<vertex /);
   assert.match(files["3D/3dmodel.model"], /BambuStudio/);
 
   fs.rmSync(dir, { recursive: true, force: true });

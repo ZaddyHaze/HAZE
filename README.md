@@ -1,4 +1,4 @@
-# Kumiko Lap Panel
+# Living Lattice — panel builder
 
 Modular 3D-printed kumiko lattice wall panels. Sized for a Bambu Lab P2S (256 × 256 mm bed), glue-free, with tiles that pop out of a wall-mounted frame and an optional floating frame with an LED cove.
 
@@ -29,14 +29,14 @@ Every export also writes `params.json`, so you can re-run it later.
 | `gw`, `gh` | grid bar width / height | 2.4 / 6 |
 | `iw`, `ih` | infill bar width / height | 1.6 / 6 |
 | `b`, `fh` | frame width / depth | 10 / 7 |
-| `seam` | `zig` (swappable), `lap` (half-lap teeth), `straight` | zig |
+| `seam` | `zig` (swappable), `lap` (half-lap teeth) | zig |
 | `snap` | snap barbs on teeth and pegs | true |
-| `fc` | fit clearance, mm (pick from the test kit) | 0.15 |
+| `fc` | fit clearance, mm: 0.05 / 0.1 / 0.15 / 0.2 (1–4 dots in the test kit) | 0.15 |
 | `pd`, `hd` | peg / hub diameter | 3.5 / 8 |
 | `sepb`, `bt` | separate frame with backing lattice / its thickness | true / 1.2 |
 | `mount` | `pegs` (hidden round pucks, swappable tiles), `frame` (panel hangs on hidden frame standoffs), `none` | pegs |
 | `flt` | float the frame off the wall, mm (0 = 5 mm shadow gap) | 0 |
-| `cove`, `lw` | LED cove in frame back / strip width | true / 10 |
+| `cove`, `lw` | LED channel in frame back / strip width | false / 10 |
 | `bx`, `by`, `mg` | bed size and edge margin | 256 / 256 / 8 |
 
 See `docs/DESIGN.md` for how every part works, and `AGENTS.md` for rules when editing with an AI assistant.
@@ -46,7 +46,7 @@ See `docs/DESIGN.md` for how every part works, and `AGENTS.md` for rules when ed
 - `border_t1.stl …` — frame pieces (print as exported)
 - `wall_pucks_xN.stl`, `frame_standoffs_xN.stl` — wall hardware
 - `puck_shims_…stl` — slotted shims (0.4 / 0.8 / 1.2 mm) to level tiles on uneven walls
-- `kumiko_WxH.3mf` — Bambu Studio project: same parts, one plate each, with 0.2 mm layers, 5 mm brim, and enough wall loops for solid bars (also inside the page's Export zip; CLI: `--no-3mf` to skip)
+- `living_lattice_WxH.3mf` — Bambu Studio project: 0.2 mm layers, 4 walls, mouse-ear brim on tiles/frame, no brim on hardware (also in the page Export zip; CLI: `--no-3mf` to skip)
 - `wall_template.svg` — print at 100 %, tape level on the wall, drill the crosses
 - `layout.svg`, `README.txt` — assembly map and steps
 

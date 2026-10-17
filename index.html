@@ -1,4 +1,4 @@
-<title>Kumiko Lap Panel Builder</title>
+<title>Living Lattice Builder</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -36,6 +36,9 @@ label.check{flex-direction:row;align-items:center;gap:8px;color:var(--ink)}
 input[type=number],select{font:500 14px var(--f-mono);color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:7px 8px;width:100%;min-width:0}
 input:focus-visible,select:focus-visible,button:focus-visible,.tile-row:focus-visible{outline:2px solid var(--indigo);outline-offset:1px}
 .hint{font:12px var(--f-mono);color:var(--muted)}
+.adv{border-top:1px solid var(--line);padding-top:14px}
+.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--indigo);min-height:32px;display:flex;align-items:center}
+.adv-body{display:flex;flex-direction:column;gap:18px;margin-top:12px}
 .stage{display:flex;flex-direction:column;gap:16px;min-width:0}
 .canvas-box{background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:14px;min-width:0}
 canvas{display:block;width:100%;height:auto}
@@ -65,21 +68,15 @@ td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 
 <div class="wrap">
   <header>
-    <h1>Kumiko Lap Panel Builder<small>Lattice panels bigger than your bed, split into printable tiles that lock together without glue</small></h1>
+    <h1>Living Lattice Builder<small>Lattice panels bigger than your bed, split into printable tiles that lock together without glue</small></h1>
   </header>
 
   <div class="grid">
     <form class="panel" id="controls" onsubmit="return false">
       <fieldset>
-        <legend>Frame</legend>
+        <legend>Your panel</legend>
         <label>Width (mm)<input type="number" id="W" value="600" min="60" step="5"></label>
         <label>Height (mm)<input type="number" id="H" value="400" min="60" step="5"></label>
-        <label>Border width<input type="number" id="b" value="10" min="4" step="0.5"></label>
-        <label>Frame height<input type="number" id="fh" value="7" min="2" step="0.5"></label>
-      </fieldset>
-
-      <fieldset>
-        <legend>Pattern</legend>
         <label class="full">Pattern
           <select id="pat">
             <option value="asanoha">Asanoha (hemp leaf)</option>
@@ -90,70 +87,97 @@ td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
             <option value="hishi">Hishi (diamond grid)</option>
           </select>
         </label>
-        <label>Cell size<input type="number" id="cell" value="40" min="8" step="1"></label>
-        <label class="check" style="align-self:end;padding-bottom:6px"><input type="checkbox" id="rot"> Rotate 90°</label>
-        <label>Grid bar width<input type="number" id="gw" value="2.4" min="0.8" step="0.4"></label>
-        <label>Grid bar height<input type="number" id="gh" value="6" min="1" step="0.5"></label>
-        <label>Infill bar width<input type="number" id="iw" value="1.6" min="0.8" step="0.4"></label>
-        <label>Infill bar height<input type="number" id="ih" value="6" min="1" step="0.5"></label>
-        <span class="hint full" id="lineHint" style="grid-column:1/-1"></span>
-      </fieldset>
-
-      <fieldset>
-        <legend>Wall mount</legend>
-        <label class="full">Mount
-          <select id="mount">
-            <option value="pegs">Wall pegs: swap or add tiles from the front</option>
-            <option value="frame">Frame only: hang the panel on hidden standoffs</option>
-            <option value="none">None</option>
+        <label class="full">Pattern size
+          <select id="size">
+            <option value="30">Small · 30 mm cells</option>
+            <option value="40" selected>Medium · 40 mm cells</option>
+            <option value="60">Large · 60 mm cells</option>
           </select>
         </label>
-        <label>Float off wall (LED gap)<input type="number" id="flt" value="0" min="0" max="60" step="1"></label>
-        <label>LED strip width<input type="number" id="lw" value="10" min="4" max="16" step="1"></label>
-        <label class="check full"><input type="checkbox" id="cove" checked> LED cove in the back of the frame (when floating)</label>
-        <span class="hint full" style="grid-column:1/-1">Wall pegs: tiles push onto round pucks hidden behind their hubs, outer tiles click into the frame, and the frame snaps onto standoffs hidden behind its bar. Any tile pops out the front. Frame only: the assembled panel (lap seams) snaps onto the hidden standoffs, so you drill fewer holes. Float 0 leaves a 5 mm shadow gap; 15–25 mm with the LED cove gives a halo backlight. Nothing needs supports and no hardware shows from the front.</span>
-      </fieldset>
-
-      <fieldset>
-        <legend>Printer</legend>
-        <label class="full">Printer bed
+        <label class="full">Style
+          <select id="style">
+            <option value="swap">Swappable tiles</option>
+            <option value="solid">One solid panel</option>
+          </select>
+        </label>
+        <span class="hint full" id="styleHint" style="grid-column:1/-1">Pop any tile out from the front to swap or add to the design.</span>
+        <label class="check full"><input type="checkbox" id="led"> LED backlight (frame floats 20 mm with a light channel)</label>
+        <label class="full">Printer
           <select id="preset">
-            <option value="256x256">Bambu P2S / X1C / P1S / A1 · 256 × 256</option>
-            <option value="180x180">Bambu A1 mini · 180 × 180</option>
-            <option value="250x210">Prusa MK4S · 250 × 210</option>
-            <option value="250x220">Prusa Core One · 250 × 220</option>
-            <option value="360x360">Prusa XL · 360 × 360</option>
-            <option value="220x220">Creality Ender-3 V3 · 220 × 220</option>
-            <option value="300x300">Creality K1 Max · 300 × 300</option>
-            <option value="custom">Custom</option>
+            <option value="256x256">Bambu P2S, X1C, P1S, A1</option>
+            <option value="180x180">Bambu A1 mini</option>
+            <option value="250x210">Prusa MK4S</option>
+            <option value="250x220">Prusa Core One</option>
+            <option value="360x360">Prusa XL</option>
+            <option value="220x220">Creality Ender-3 V3</option>
+            <option value="300x300">Creality K1 Max</option>
+            <option value="custom">Other (set bed in Advanced)</option>
           </select>
         </label>
-        <label>Bed X (mm)<input type="number" id="bx" value="256" min="80" step="1"></label>
-        <label>Bed Y (mm)<input type="number" id="by" value="256" min="80" step="1"></label>
-        <label class="full">Edge margin (brim/skirt room)<input type="number" id="mg" value="8" min="0" step="1"></label>
+        <label class="full">Fit (from your test kit)
+          <select id="fc">
+            <option value="0.05">1 dot (tightest)</option>
+            <option value="0.1">2 dots</option>
+            <option value="0.15" selected>3 dots (default)</option>
+            <option value="0.2">4 dots (loosest)</option>
+          </select>
+        </label>
       </fieldset>
 
-      <fieldset>
-        <legend>Joining</legend>
-        <label class="full">Seam style
-          <select id="seam">
-            <option value="zig">Zigzag (tiles swap individually)</option>
-            <option value="lap">Half-lap with locking teeth (one solid panel)</option>
-            <option value="straight">Straight cut with seam rails</option>
-          </select>
-        </label>
-        <span class="hint full" id="seamHint" style="grid-column:1/-1"></span>
-        <label class="check full"><input type="checkbox" id="pins" checked> Glue-free joints (bowtie keys + border pegs)</label>
-        <label class="check full"><input type="checkbox" id="snap" checked> Snap-fit teeth (click-lock front to back)</label>
-        <label>Peg diameter<input type="number" id="pd" value="3.5" min="1.5" step="0.5"></label>
-        <label>Hub diameter<input type="number" id="hd" value="8" min="4" step="0.5"></label>
-        <label class="full">Fit clearance (mm)<input type="number" id="fc" value="0.15" min="0" max="0.5" step="0.05"></label>
-        <label class="check full"><input type="checkbox" id="sepb" checked> Print border separately, with backing lattice</label>
-        <label class="full">Backing lattice thickness<input type="number" id="bt" value="1.2" min="0.6" step="0.2"></label>
-        <label class="check full"><input type="checkbox" id="plates" checked> Include back splice plates</label>
-        <label>Plate thickness<input type="number" id="pt" value="1.6" min="0.8" step="0.2"></label>
-        <label>Plate length<input type="number" id="pl" value="40" min="15" step="5"></label>
-      </fieldset>
+      <details class="adv">
+        <summary>Advanced</summary>
+        <div class="adv-body">
+          <fieldset>
+            <legend>Frame and pattern</legend>
+            <label>Border width<input type="number" id="b" value="10" min="4" step="0.5"></label>
+            <label>Frame height<input type="number" id="fh" value="7" min="2" step="0.5"></label>
+            <label>Cell size (mm)<input type="number" id="cell" value="40" min="8" step="1"></label>
+            <label class="check" style="align-self:end;padding-bottom:6px"><input type="checkbox" id="rot"> Rotate 90°</label>
+            <label>Grid bar width<input type="number" id="gw" value="2.4" min="0.8" step="0.4"></label>
+            <label>Grid bar height<input type="number" id="gh" value="6" min="1" step="0.5"></label>
+            <label>Infill bar width<input type="number" id="iw" value="1.6" min="0.8" step="0.4"></label>
+            <label>Infill bar height<input type="number" id="ih" value="6" min="1" step="0.5"></label>
+            <span class="hint full" id="lineHint" style="grid-column:1/-1"></span>
+          </fieldset>
+          <fieldset>
+            <legend>Mount and light</legend>
+            <label class="full">Mount
+              <select id="mount">
+                <option value="pegs">Wall pegs: swap or add tiles from the front</option>
+                <option value="frame">Frame only: hang the panel on hidden standoffs</option>
+                <option value="none">None</option>
+              </select>
+            </label>
+            <label>Float off wall (mm)<input type="number" id="flt" value="0" min="0" max="60" step="1"></label>
+            <label>LED strip width<input type="number" id="lw" value="10" min="4" max="16" step="1"></label>
+            <label class="check full"><input type="checkbox" id="cove"> LED channel in the back of the frame</label>
+          </fieldset>
+          <fieldset>
+            <legend>Joints</legend>
+            <label class="full">Seam style
+              <select id="seam">
+                <option value="zig">Zigzag (tiles swap individually)</option>
+                <option value="lap">Half-lap with locking teeth (one solid panel)</option>
+              </select>
+            </label>
+            <span class="hint full" id="seamHint" style="grid-column:1/-1"></span>
+            <label class="check full"><input type="checkbox" id="snap" checked> Snap-fit barbs (click-lock)</label>
+            <label>Peg diameter<input type="number" id="pd" value="3.5" min="1.5" step="0.5"></label>
+            <label>Hub diameter<input type="number" id="hd" value="8" min="4" step="0.5"></label>
+            <label class="full">Backing lattice thickness<input type="number" id="bt" value="1.2" min="0.6" step="0.2"></label>
+          </fieldset>
+          <fieldset>
+            <legend>Printer bed</legend>
+            <label>Bed X (mm)<input type="number" id="bx" value="256" min="80" step="1"></label>
+            <label>Bed Y (mm)<input type="number" id="by" value="256" min="80" step="1"></label>
+            <label class="full">Edge margin (brim room)<input type="number" id="mg" value="8" min="0" step="1"></label>
+          </fieldset>
+          <div hidden>
+            <input type="checkbox" id="pins" checked><input type="checkbox" id="sepb" checked>
+            <input type="checkbox" id="plates"><input type="number" id="pt" value="1.6"><input type="number" id="pl" value="40">
+          </div>
+        </div>
+      </details>
     </form>
 
     <section class="stage">

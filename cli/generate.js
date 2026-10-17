@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Headless export: writes the same files the page's "Download all" button zips,
-// plus a Bambu Studio .3mf with per-object print settings (0.2 mm layers, 5 mm brim,
-// wall loops enough to print bars solid).
+// plus a Bambu Studio .3mf with per-object print settings (HANDOFF.md):
+//   0.2 mm layers, 4 walls, mouse-ear brim on tiles/frame, no brim on hardware.
 //   node cli/generate.js                         -> out/ with defaults from index.html
 //   node cli/generate.js --set W=900 --set H=600 --set flt=20 --set b=19
 //   node cli/generate.js --params my-panel.json --out builds/living-room
@@ -14,7 +14,6 @@ const {
   writeBambu3mf,
   latticeObjectSettings,
   latticeProjectOverrides,
-  solidWallLoops,
 } = require("./bambu-3mf");
 
 const args = process.argv.slice(2);
@@ -48,10 +47,9 @@ if (testOnly) {
 }
 
 const parts3mf = [];
-const objSet = latticeObjectSettings(P);
 function addPart(name, tris) {
   write(`${name}.stl`, E.stl(tris, name));
-  if (want3mf) parts3mf.push({ name, tris, obj_settings: { ...objSet } });
+  if (want3mf) parts3mf.push({ name, tris, obj_settings: latticeObjectSettings(P, name) });
 }
 
 for (const t of m.tiles) addPart(`tile_${t.name}`, E.tileTris(t));
@@ -74,8 +72,7 @@ write("params.json", JSON.stringify(E.vals, null, 2));
 if (want3mf && parts3mf.length) {
   const proj = latticeProjectOverrides(P);
   const bed = proj._bed; delete proj._bed;
-  const walls = solidWallLoops(Math.max(P.gw, P.iw));
-  const name = `kumiko_${P.W}x${P.H}.3mf`;
+  const name = `living_lattice_${P.W}x${P.H}.3mf`;
   writeBambu3mf(path.join(out, name), parts3mf, proj, { bed });
-  console.log(`  ${name}  (${parts3mf.length} objects, ${walls} wall loops, 0.2 mm layers, 5 mm brim)`);
+  console.log(`  ${name}  (${parts3mf.length} objects, 0.2 mm / 4 walls / mouse-ear brim on tiles+frame)`);
 }

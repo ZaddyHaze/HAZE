@@ -93,5 +93,5 @@ Requires: floating frame (`flt > 0`), a wall mount, separate frame, `b ≥ off +
 - **Slotted puck / standoff screw holes**: ±2 mm adjustment for imperfect drilling.
 - **Backlight seam leak**: seam gaps (≈ fc) glow under LED backlight; consider a stepped seam or a diffuser layer.
 - **Borderless edge option**: so a panel can grow outward later without new frame pieces.
-- **3MF export with print settings**: CLI (`cli/generate.js`) and the page's Export zip both write `kumiko_WxH.3mf` with per-object Bambu Studio settings (0.2 mm layers, 5 mm outer brim, wall loops = ceil(max(gw,iw)/(2·0.4)) so bars print solid). Shared builder: `cli/bambu-3mf.js`. Bambu Studio's CLI could turn the project into a G-code `.3mf` automatically.
+- **3MF export with print settings** (done): CLI and web Export write `living_lattice_WxH.3mf` via `cli/bambu-3mf.js` — 0.2 mm layers, 4 walls, mouse-ear brim on tiles/frame, no brim on hardware, supports off, X-Y hole/contour compensation 0.
 - **Mesh boolean cleanup**: export each part as one manifold (e.g. via manifold-3d) instead of overlapping prisms.
