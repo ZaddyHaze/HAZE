@@ -1,5 +1,5 @@
 const $=id=>document.getElementById(id);
-const ids=["W","H","b","fh","pat","cell","rot","gw","gh","iw","ih","preset","bx","by","mg","seam","pins","snap","pd","hd","fc","sepb","bt","mount","flt","cove","lw","plates","pt","pl"];
+const ids=["W","H","b","fh","pat","cell","rot","gw","gh","iw","ih","preset","bx","by","mg","seam","pins","snap","pd","hd","fc","sepb","bt","mount","flt","cove","lw","plates","pt","pl","ins","bk","cFrame","cGrid","cIns","cBack","bkc","look","op"];
 let model=null, selected=0;
 
 function readParams(){
@@ -10,12 +10,70 @@ function readParams(){
     bx:Math.max(80,n("bx")),by:Math.max(80,n("by")),mg:Math.max(0,n("mg")),
     zig:$("seam").value!=="straight",lap:$("seam").value==="lap",
     pins:$("pins").checked&&$("seam").value!=="straight",
-    sepb:$("sepb").checked&&$("seam").value!=="straight",bt:Math.max(0.6,n("bt")),mount:$("mount").value==="cleat"&&$("sepb").checked&&$("seam").value!=="straight",wall:$("mount").value==="pegs"&&$("seam").value!=="straight",fm:($("mount").value==="pegs"||$("mount").value==="frame")&&$("sepb").checked&&$("seam").value!=="straight",pin:Math.max(1.5,n("pd")),hub:Math.max(4,n("hd")),fc:Math.min(0.5,Math.max(0,n("fc"))),snap:$("snap").checked,flt:Math.max(0,+$("flt").value||0),cove:$("cove").checked,lw:Math.min(16,Math.max(4,+$("lw").value||10)),
+    sepb:$("sepb").checked&&$("seam").value!=="straight",bt:Math.max(0.6,n("bt")),mount:$("mount").value==="cleat"&&$("sepb").checked&&$("seam").value!=="straight",wall:$("mount").value==="pegs"&&$("seam").value!=="straight",fm:($("mount").value==="pegs"||$("mount").value==="frame")&&$("sepb").checked&&$("seam").value!=="straight",fit:$("mount").value==="fit"&&$("sepb").checked&&$("seam").value!=="straight",op:Math.max(60,n("op")),pin:Math.max(1.5,n("pd")),hub:Math.max(4,n("hd")),fc:Math.min(0.5,Math.max(0,n("fc"))),snap:$("snap").checked,flt:Math.max(0,+$("flt").value||0),ins:parseMap($("ins").value),bk:$("bk").checked,cFrame:$("cFrame").value,cGrid:$("cGrid").value,cIns:$("cIns").value,cBack:$("cBack").value,bkc:parseMap($("bkc").value),look:$("look").checked,cove:$("cove").checked,lw:Math.min(16,Math.max(4,+$("lw").value||10)),
     plates:$("plates").checked&&$("seam").value==="straight",pt:Math.max(.8,n("pt")),pl:Math.max(15,n("pl"))};
 }
 const isTri=p=>["asanoha","kikko","mitsukude","sankaku"].includes(p);
 
 /* ---------- lattice: cells + shared edges ---------- */
+/* ---------- photo designer: break a picture into cells, each matched to a stocked filament color ---------- */
+const PALETTE=[
+  {id:1,name:"Sumi 墨 · charcoal",hex:"#2b2b2b"},{id:2,name:"Kinari 生成り · unbleached",hex:"#f1ecdd"},
+  {id:3,name:"Ai 藍 · indigo",hex:"#2e3f63"},{id:4,name:"Sora 空 · sky",hex:"#7fa7c9"},
+  {id:5,name:"Matcha 抹茶 · green tea",hex:"#6e7955"},{id:6,name:"Shu 朱 · vermilion",hex:"#c8442e"},
+  {id:7,name:"Yamabuki 山吹 · gold",hex:"#e6a83a"},{id:8,name:"Sakura 桜 · blossom",hex:"#e7b4be"},
+  {id:9,name:"Cha 茶 · tea brown",hex:"#6f4b3e"},{id:10,name:"Nezumi 鼠 · grey",hex:"#8e8e8e"}];
+let photo=null; // {w,h,data} pixels of the uploaded picture, fitted to the panel
+function hex2rgb(h){const n=parseInt(h.slice(1),16);return [n>>16&255,n>>8&255,n&255];}
+function rgb2lab([r,g,b]){const f=c=>{c/=255;return c>0.04045?((c+0.055)/1.055)**2.4:c/12.92;};const R=f(r),G=f(g),B=f(b);
+  let x=(R*0.4124+G*0.3576+B*0.1805)/0.95047,y=R*0.2126+G*0.7152+B*0.0722,z=(R*0.0193+G*0.1192+B*0.9505)/1.08883;
+  const t=v=>v>0.008856?Math.cbrt(v):7.787*v+16/116;x=t(x);y=t(y);z=t(z);return [116*y-16,500*(x-y),200*(y-z)];}
+const PAL_LAB=PALETTE.map(c=>rgb2lab(hex2rgb(c.hex)));
+function nearestColor(rgb,allowed){const L=rgb2lab(rgb);let best=0,bd=1e9;PALETTE.forEach((c,i)=>{if(allowed&&!allowed.includes(c.id))return;const q=PAL_LAB[i],d=(L[0]-q[0])**2+(L[1]-q[1])**2+(L[2]-q[2])**2;if(d<bd){bd=d;best=i;}});return best;}
+function mapPhoto(P,Lt){
+  // average the picture under each cell, then snap to the nearest palette color (CIELAB distance)
+  if(!photo) return null;
+  const box=[[P.b,P.b],[P.W-P.b,P.b],[P.W-P.b,P.H-P.b],[P.b,P.H-P.b]], out=[];
+  const ccwP=p=>{let ar=0;for(let i=0;i<p.length;i++){const a=p[i],b=p[(i+1)%p.length];ar+=a[0]*b[1]-b[0]*a[1];}return ar<0?p.slice().reverse():p;};
+  Lt.cells.forEach((cl,ci)=>{
+    const vis=clipConvex(ccwP(cl.poly),box); // edge cells count too: their visible part gets a chip cut to fit
+    if(vis.length<3||polyArea(vis)<1){out.push(-1);return;}
+    let r=0,g=0,b=0,n=0;const t=cl.poly;
+    for(let a=0;a<=6;a++)for(let k=0;k<=6-a;k++){const w0=a/6,w1=k/6,w2=1-w0-w1;
+      const x=t[0][0]*w0+t[1][0]*w1+t[2%t.length][0]*w2, y=t[0][1]*w0+t[1][1]*w1+t[2%t.length][1]*w2;
+      const px=Math.min(photo.w-1,Math.max(0,Math.floor(x/P.W*photo.w))), py=Math.min(photo.h-1,Math.max(0,Math.floor((1-y/P.H)*photo.h))), o=(py*photo.w+px)*4;
+      r+=photo.data[o];g+=photo.data[o+1];b+=photo.data[o+2];n++;}
+    out.push(nearestColor([r/n,g/n,b/n]));
+  });
+  return out;
+}
+function cellMapSVG(){
+  const {P,Lt,cellColors}=model; if(!cellColors) return "";
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -10 ${P.W+20} ${P.H+80}" width="${P.W+20}mm" height="${P.H+80}mm"><rect x="-10" y="-10" width="${P.W+20}" height="${P.H+80}" fill="#fff"/>`;
+  Lt.cells.forEach((cl,ci)=>{const k=cellColors[ci]; if(k<0) return; const pts=cl.poly.map(p=>p[0].toFixed(1)+","+(P.H-p[1]).toFixed(1)).join(" ");
+    s+=`<polygon points="${pts}" fill="${PALETTE[k].hex}" fill-opacity="0.35" stroke="#555" stroke-width="0.3"/><text x="${cl.c[0].toFixed(1)}" y="${(P.H-cl.c[1]+2).toFixed(1)}" font-family="sans-serif" font-size="${Math.max(3,P.cell/8).toFixed(1)}" text-anchor="middle">${PALETTE[k].id}</text>`;});
+  s+=`<rect x="0" y="0" width="${P.W}" height="${P.H}" fill="none" stroke="#000" stroke-width="0.6"/>`;
+  const cnt=colorCounts(); let y=P.H+14, x=0;
+  cnt.forEach(c=>{s+=`<rect x="${x}" y="${y-5}" width="6" height="6" fill="${c.hex}" stroke="#555" stroke-width="0.3"/><text x="${x+8}" y="${y}" font-family="sans-serif" font-size="5">${c.id} ${c.name.split(" · ")[1]} × ${c.n}</text>`; x+=P.W/4; if(x>P.W-10){x=0;y+=10;}});
+  s+=`<text x="0" y="${P.H+64}" font-family="sans-serif" font-size="5">Numbered cell map: each number is a backer chip color. Front view.</text>`;
+  return s+"</svg>";
+}
+function colorCounts(){const {cellColors}=model; if(!cellColors) return []; const n={}; for(const k of cellColors) if(k>=0) n[k]=(n[k]||0)+1;
+  return Object.entries(n).map(([k,v])=>({...PALETTE[+k],n:v})).sort((a,b)=>b.n-a.n);}
+function parseMap(str){const m={};for(const part of String(str||"").split(";")){const [k,v]=part.split(":");if(k&&v)m[k.trim()]=v.trim();}return m;}
+function mapStr(m){return Object.entries(m).map(([k,v])=>k+":"+v).join(";");}
+/* ---------- inserts: what fills each cell. Tiles can mix inserts that share a grid ---------- */
+const TRI_INSERTS={asanoha:"Asanoha 麻の葉",mitsukude:"Mitsukude 三つ組手",sankaku:"Open (sankaku)"};
+function canMix(P){return isTri(P.pat)&&(P.pat in TRI_INSERTS);}
+function insertSegs(ins,cell){
+  const t=cell.poly, c=cell.c, mid=(a,b)=>[(a[0]+b[0])/2,(a[1]+b[1])/2], out=[];
+  if(t.length!==3) return out;
+  for(let k=0;k<3;k++){
+    if(ins==="asanoha") out.push([c,t[k]]);
+    if(ins==="mitsukude") out.push([c,mid(t[k],t[(k+1)%3])]);
+  }
+  return out;
+}
 function lattice(P){
   const {W,H,cell:s}=P, cx=W/2, cy=H/2, cells=[], emap=new Map();
   let ang=P.rot?Math.PI/2:0; if(P.pat==="hishi") ang+=Math.PI/4;
@@ -121,7 +179,8 @@ function build(){
     for(let r=1;r<L.ny;r++)for(let c=0;c<L.nx;c++){const n=per(L.tw);for(let k=0;k<n;k++)plates.push({len:P.pl,wid:P.b-1})}
   }
   const borders=makeBorders(P,Lt,tiles.pins||[],tiles.sockets||[]);
-  model={P,L,tiles,plates,pins:tiles.pins||[],sockets:tiles.sockets||[],keys:tiles.keys||[],K:tiles.K,teeth:tiles.teeth||0,borders,pegs:borders.reduce((n,b)=>n+(b.pegs||0),0)};
+  const cellColors=mapPhoto(P,Lt);
+  model={P,L,Lt,cellColors,tiles,plates,pins:tiles.pins||[],sockets:tiles.sockets||[],keys:tiles.keys||[],K:tiles.K,teeth:tiles.teeth||0,borders,pegs:borders.reduce((n,b)=>n+(b.pegs||0),0)};
   if(selected>=tiles.length) selected=0;
   render();
 }
@@ -335,7 +394,9 @@ function makeTiles(P,L,Lt){
         }
       }
     }
-    Lt.cells.forEach((cl,ci)=>{for(const [a,b] of cl.infill) addBar(cellTile[ci],a,b,cl.kind==="g"?P.gw:P.iw,cl.kind==="g"?P.gh:P.ih,cl.kind,P.lap?terr[ci]:cpoly[ci]);});
+    const mix=canMix(P);
+    Lt.cells.forEach((cl,ci)=>{const ins=mix?(P.ins[tiles[cellTile[ci]].name]||P.pat):null; const segs=mix?insertSegs(ins,cl):cl.infill; tiles[cellTile[ci]].insert=ins||P.pat;
+      for(const [a,b] of segs) addBar(cellTile[ci],a,b,cl.kind==="g"?P.gw:P.iw,cl.kind==="g"?P.gh:P.ih,cl.kind,P.lap?terr[ci]:cpoly[ci]);});
     // split hubs: each tile gets the part of the ring inside its own cells, plus a 1 mm front cap
     const N=32, cap=Math.min(1,P.gh/3);
     pinPts.forEach((v,pi)=>{
@@ -391,6 +452,19 @@ function makeTiles(P,L,Lt){
   }
 
   tiles.pins=pinPts.filter((p,i)=>!sockets.some(s=>s.p===p)); tiles.sockets=sockets; tiles.keys=keys; tiles.K=K; tiles.teeth=toothCount;
+  // colored backers: a thin plate behind each tile, cut to the tile's cells, held between the tile (and the frame's
+  // backing lattice) and a shoulder on the tile's pucks. Holes let the puck pegs through, hidden behind the hubs.
+  if(P.bk&&P.wall){
+    const BK=BACKER(P), inner=[[P.b+0.3,P.b+0.3],[P.W-P.b-0.3,P.b+0.3],[P.W-P.b-0.3,P.H-P.b-0.3],[P.b+0.3,P.H-P.b-0.3]];
+    const inset=(poly,d)=>{let out=ccw(poly);const src=out.slice();for(let i=0;i<src.length&&out.length>2;i++){const a=src[i],b=src[(i+1)%src.length],L=Math.hypot(b[0]-a[0],b[1]-a[1]),n=[-(b[1]-a[1])/L,(b[0]-a[0])/L];out=cutHalf(out,[a[0]+n[0]*d,a[1]+n[1]*d],n);}return out;};
+    tiles.forEach((T,ti)=>{
+      const holes=sockets.filter(k=>k.tile===ti).map(k=>{const h=[];for(let q=0;q<16;q++){const a=2*Math.PI*q/16;h.push([k.p[0]+BK.hole/Math.cos(Math.PI/16)*Math.cos(a),k.p[1]+BK.hole/Math.cos(Math.PI/16)*Math.sin(a)]);}return h;});
+      let pieces=[];
+      Lt.cells.forEach((cl,ci)=>{if(cellTile[ci]!==ti)return; const pc=clipConvex(inset(cl.poly,0.12),inner); if(pc.length>2&&polyArea(pc)>0.05) pieces.push(pc);});
+      for(const h of holes) pieces=pieces.flatMap(pc=>polyMinusConvex(pc,h));
+      T.backer=pieces.filter(pc=>polyArea(pc)>0.02).map(pts=>({pts,z0:BK.z0,z:BK.z0+BK.t,kind:"bk"}));
+    });
+  }
   return tiles;
 }
 
@@ -468,6 +542,25 @@ function makeBorders(P,Lt,pegPts,sockets){
           const pk=Wd.pocket/2; pockets.push([c[0]-pk,c[1]-pk,c[0]+pk,c[1]+pk]);
         }
       }
+      // Furniture fit (cube-shelf insert): spring clips snap into the bar's back like standoffs; two leaves reach
+      // past the frame's outer edge, behind the frame, and press on the shelf walls. Hidden in the shadow gap.
+      const clips=[];
+      if(P.fit&&b>=8){
+        const F=FITCLIP(P), h=F.len/2, reach=Math.max(0,(nm==="T"||nm==="B"?(P.op-P.H):(P.op-P.W))/2)+F.pre;
+        const along=[lo+h+F.leaf+3,hi-h-F.leaf-3], L0=along[1]-along[0];
+        const nC=L0<0?0:Math.max(1,Math.ceil((hi-lo)/300));
+        for(let q=0;q<nC;q++){
+          const s0=nC===1?(along[0]+along[1])/2:along[0]+L0*(q+0.5)/nC;
+          const rect=span(s0,h,0.8,b-0.8), pegs=[-F.peg,F.peg].map(d=>at(s0+d,b/2)), cb=[];
+          cb.push({pts:ccwRect(rect),z0:bh,z:bh+F.t,kind:"cl"});
+          for(const q2 of pegs) snapPegsSq(q2[0],q2[1],bh,cb,"sp");
+          for(const sg of [-1,1]){ // leaves: from each end of the body, angled out past the outer edge (off < 0)
+            const r0=s0+sg*(h-2), r1=s0+sg*(h+F.leaf), P4=[[r0,0.8],[r1,-reach],[r1,-reach+F.lt],[r0,0.8+F.lt+0.6]].map(([u,o])=>at(u,o));
+            cb.push({pts:ccw(P4),z0:bh,z:bh+F.t,kind:"lf"});
+          }
+          clips.push({rect,pegs,boxes:cb,reach}); sockets2.push(...pegs);
+        }
+      }
       let hook=null;
       if(P.mount&&nm==="T"){
         const cx=(lo+hi)/2, hw=Math.min(C.hookW/2,(hi-lo)/2-P.b-2);
@@ -512,10 +605,27 @@ function makeBorders(P,Lt,pegPts,sockets){
       let a=1e9,bb=-1e9,c=1e9,d=-1e9,vol=0;
       for(const bx of boxes){for(const q of bx.pts){a=Math.min(a,q[0]);bb=Math.max(bb,q[0]);c=Math.min(c,q[1]);d=Math.max(d,q[1]);}vol+=polyArea(bx.pts)*(bx.z-bx.z0);}
       const bw=bb-a, bhh=d-c, topZ=bh, turn=!(bw<=ex&&bhh<=ey)&&(bhh<=ex&&bw<=ey);
-      pieces.push({name:`Border ${nm}${k>1?i+1:""}`,pegs,hook,feet,boxes,bx0:a,by0:c,bw,bh:bhh,top:topZ,turn,fits:(bw<=ex&&bhh<=ey)||turn,grams:vol/1000*1.24});
+      pieces.push({name:`Border ${nm}${k>1?i+1:""}`,pegs,hook,feet,clips,boxes,bx0:a,by0:c,bw,bh:bhh,top:topZ,turn,fits:(bw<=ex&&bhh<=ey)||turn,grams:vol/1000*1.24});
     }
   }
   return pieces;
+}
+/* ---------- furniture fit: spring clips for a panel that presses into a cube-shelf opening ---------- */
+function FITCLIP(P){return {len:24,peg:7,t:5,leaf:16,lt:1.4,pre:0.8};} // body length, peg offset, depth, leaf length/thickness, preload
+function ccw(p){let a=0;for(let i=0;i<p.length;i++){const q=p[i],r=p[(i+1)%p.length];a+=q[0]*r[1]-r[0]*q[1];}return a<0?p.slice().reverse():p;}
+function allClips(){return (model.borders||[]).flatMap(b=>(b.clips||[]).map(c=>({...c,piece:b.name})));}
+function clipTris(P){
+  // each clip prints wall side down (z flipped), pegs pointing up; leaves stand as thin vertical walls, so they
+  // flex along the layers, not across them
+  const out=[], clips=allClips(), gap=6, ex=P.bx-2*P.mg, top=WALL(P).fd+FITCLIP(P).t;
+  let x=0,y=0,row=0;
+  for(const c of clips){
+    let a=1e9,bb=-1e9,cc=1e9,d=-1e9; for(const b of c.boxes)for(const q of b.pts){a=Math.min(a,q[0]);bb=Math.max(bb,q[0]);cc=Math.min(cc,q[1]);d=Math.max(d,q[1]);}
+    const w=bb-a, h=d-cc; if(x+w>ex){x=0;y+=row+gap;row=0;}
+    for(const b of c.boxes) boxTris(b.pts.map(q=>[q[0]-a+x,q[1]-cc+y]),top-b.z,top-b.z0,out);
+    x+=w+gap; row=Math.max(row,h);
+  }
+  return out;
 }
 function cleatDims(P){
   // all in mm. r = height up the wall from the cleat's bottom, d = distance out from the wall
@@ -563,12 +673,13 @@ function ringTris(cx,cy,ri,ro,z0,z1,out,N=32){
 }
 function puckTris(n,P){
   // printed wall side down: floor with the screw hole, a ring up to the tile's back, then the hollow peg
-  const Wd=WALL(P), out=[], gap=4, D=2*Wd.puckR, per=Math.max(1,Math.floor((P.bx-2*P.mg)/(D+gap)));
+  const Wd=WALL(P), out=[], gap=4, D=2*(P.bk?BACKER(P).shoulder:Wd.puckR), per=Math.max(1,Math.floor((P.bx-2*P.mg)/(D+gap)));
   for(let i=0;i<n;i++){
     const ox=(i%per)*(D+gap)+Wd.puckR, oy=Math.floor(i/per)*(D+gap)+Wd.puckR;
     ringTris(ox,oy,Wd.hole/2,Wd.puckR,0,Wd.base,out);
     ringTris(ox,oy,Wd.cb/2,Wd.puckR,Wd.base,Wd.T,out);
     ringTris(ox,oy,Wd.cb/2,(Wd.sock-P.fc)/2,Wd.T,Wd.T+Wd.pegL,out);
+    if(P.bk){const BK=BACKER(P), sh=Wd.zw-(BK.z0+BK.t); ringTris(ox,oy,Wd.puckR-0.01,BK.shoulder,0,sh,out);} // shoulder the backer rests on
   }
   return out;
 }
@@ -796,6 +907,22 @@ function wallTemplateSVG(){
   return s+"</svg>";
 }
 function ccwRect(r){return [[r[0],r[1]],[r[2],r[1]],[r[2],r[3]],[r[0],r[3]]];}
+function polyMinusConvex(P,H){ // convex P minus convex H (both CCW) -> convex pieces
+  const out=[]; let rest=P;
+  for(let i=0;i<H.length&&rest.length>2;i++){
+    const a=H[i],b=H[(i+1)%H.length], n=[-(b[1]-a[1]),b[0]-a[0]];
+    const outside=cutHalf(rest,a,[-n[0],-n[1]]); if(outside.length>2&&polyArea(outside)>1e-4) out.push(outside);
+    rest=cutHalf(rest,a,n);
+  }
+  return out;
+}
+function BACKER(P){const gh=P.gh, z0=P.sepb?gh+P.bt:gh; return {t:0.8,z0,hole:WALL(P).puckR+0.3,shoulder:WALL(P).puckR+2};}
+function backerTris(T){
+  // prints flat: its own front face (z0) on the bed
+  const out=[], map=(x,y)=>{const lx=x-T.bx0, ly=y-T.by0; return T.turn?[ly,T.bw-lx]:[lx,ly];};
+  for(const b of T.backer||[]) boxTris(b.pts.map(q=>map(q[0],q[1])),0,b.z-b.z0,out);
+  return out;
+}
 function rectMinus(R,H){
   const x0=Math.max(R[0],H[0]),x1=Math.min(R[2],H[2]),y0=Math.max(R[1],H[1]),y1=Math.min(R[3],H[3]);
   if(x0>=x1||y0>=y1) return [R];
@@ -848,12 +975,21 @@ function render(){
   const X=x=>pad+x*sc, Y=y=>pad+(P.H-y)*sc;
   g.fillStyle=css("--paper"); g.fillRect(X(0),Y(P.H),P.W*sc,P.H*sc);
   const ink=css("--ink"), alt=css("--muted"), sel=css("--indigo"), wood=css("--wood");
+  const poly=pts=>{g.beginPath(); pts.forEach((p,k)=>k?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1]))); g.closePath(); g.fill();};
+  if(P.look){
+    // finished look: backer color behind each tile, lattice and inserts in their filament colors, frame on top
+    if(model.cellColors){ g.lineWidth=0.8; model.Lt.cells.forEach((cl,ci)=>{const k=model.cellColors[ci]; if(k<0) return; g.save(); g.beginPath(); g.rect(X(P.b),Y(P.H-P.b),(P.W-2*P.b)*sc,(P.H-2*P.b)*sc); g.clip(); g.fillStyle=g.strokeStyle=PALETTE[k].hex; poly(cl.poly); g.stroke(); g.restore();}); }
+    else tiles.forEach(t=>{ if(t.backer){ g.fillStyle=g.strokeStyle=P.bkc[t.name]||P.cBack; g.lineWidth=0.8; for(const b of t.backer){ poly(b.pts); g.stroke(); } } });
+    tiles.forEach(t=>{ for(const bx of t.boxes){ g.fillStyle=bx.kind==="i"?P.cIns:P.cGrid; poly(bx.pts);} });
+    g.fillStyle=P.cFrame; for(const bp of model.borders) for(const bx of bp.boxes) if(bx.kind==="r") poly(bx.pts);
+    const t=tiles[selected]; if(t){ g.strokeStyle=sel; g.lineWidth=2; g.setLineDash([5,4]); g.strokeRect(X(Math.max(t.x0,P.b)),Y(Math.min(t.y1,P.H-P.b)),(Math.min(t.x1,P.W-P.b)-Math.max(t.x0,P.b))*sc,(Math.min(t.y1,P.H-P.b)-Math.max(t.y0,P.b))*sc); g.setLineDash([]); }
+  } else {
   tiles.forEach((t,i)=>{
     const base=i===selected?sel:((t.r+t.c)%2?alt:ink);
     for(const bx of t.boxes){
       if(bx.kind==="c") continue;
       g.fillStyle=bx.kind==="i"?(i===selected?sel:wood):base;
-      g.beginPath(); bx.pts.forEach((p,k)=>k?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1]))); g.closePath(); g.fill();
+      poly(bx.pts);
     }
   });
   for(const bp of model.borders){
@@ -863,7 +999,8 @@ function render(){
     }
     g.globalAlpha=1;
   }
-  if(model.borders.length){
+  }
+  if(model.borders.length&&!P.look){
     g.strokeStyle=css("--sheet"); g.lineWidth=2;
     for(const bp of model.borders){const r=bp.boxes[0].pts; g.strokeRect(X(r[0][0]),Y(r[2][1]),(r[2][0]-r[0][0])*sc,(r[2][1]-r[0][1])*sc);}
   }
@@ -874,7 +1011,7 @@ function render(){
     g.setLineDash([]);
   }
   g.font="600 13px "+css("--f-mono");
-  tiles.forEach((t,i)=>{const cx=X((t.x0+t.x1)/2),cy=Y((t.y0+t.y1)/2);const w=g.measureText(t.name).width+12;
+  if(!P.look) tiles.forEach((t,i)=>{const cx=X((t.x0+t.x1)/2),cy=Y((t.y0+t.y1)/2);const w=g.measureText(t.name).width+12;
     g.fillStyle=i===selected?wood:sel;g.fillRect(cx-w/2,cy-11,w,22);g.fillStyle=css("--sheet");g.textAlign="center";g.textBaseline="middle";g.fillText(t.name,cx,cy+1);});
   g.fillStyle=alt; g.font="12px "+css("--f-mono"); g.textAlign="center"; g.textBaseline="alphabetic";
   g.fillText(P.W+" × "+P.H+" mm",cw/2,ch-6);
@@ -892,11 +1029,14 @@ function render(){
     (model.pegs?`<div><b>${model.pegs}</b>border pegs</div>`:"")+
     (model.borders.length?`<div><b>${model.borders.length}</b>border pieces</div>`:"")+
     (P.wall?`<div><b>${model.sockets.length}</b>wall pucks (2 per tile)</div><div><b>${WALL(P).T.toFixed(0)} mm</b>float off the wall</div>`:"")+
+    (P.fit?`<div><b>${allClips().length}</b>hidden spring clips</div><div><b>${((P.op-Math.max(P.W,P.H))/2).toFixed(1)} mm</b>gap to the shelf walls</div>`:"")+
     (P.mount?`<div><b>${model.borders.filter(b=>b.hook).length}</b>hidden wall cleats</div><div><b>${model.borders[0]?model.borders[0].top.toFixed(0):"–"} mm</b>frame depth</div>`:"");
 
-  $("tiles").innerHTML=tiles.map((t,i)=>`<tr class="tile-row${i===selected?" sel":""}" data-i="${i}" tabindex="0"><td><b>${t.name}</b></td><td class="n">${t.bw.toFixed(1)} × ${t.bh.toFixed(1)}</td><td class="n">${t.bars}</td><td class="n">≈ ${Math.round(t.grams)} g</td><td>${!t.fits?"Too big":(t.role==="addition"?"Back down":t.role==="base"?"Face down":"")+(t.turn?(t.role?", turned":"Turned 90°"):(t.role?"":"As shown"))}</td></tr>`).join("")+
-    model.borders.map(t=>`<tr><td><b>${t.name}</b></td><td class="n">${t.bw.toFixed(1)} × ${t.bh.toFixed(1)}</td><td class="n">—</td><td class="n">≈ ${Math.round(t.grams)} g</td><td>${!t.fits?"Too big":t.turn?"Turned 90°":"Flange down"}</td></tr>`).join("");
+  $("tiles").innerHTML=tiles.map((t,i)=>`<tr class="tile-row${i===selected?" sel":""}" data-i="${i}" tabindex="0"><td><b>${t.name}</b></td><td class="n">${t.bw.toFixed(1)} × ${t.bh.toFixed(1)}</td><td class="n">${t.bars}</td><td class="n">≈ ${Math.round(t.grams)} g</td><td>${canMix(P)?`<select data-ins="${t.name}" aria-label="Insert for tile ${t.name}">${Object.entries(TRI_INSERTS).map(([k,n])=>`<option value="${k}"${(t.insert||P.pat)===k?" selected":""}>${n}</option>`).join("")}</select>`:"—"}</td><td>${t.backer?`<input type="color" data-bk="${t.name}" value="${P.bkc[t.name]||P.cBack}" aria-label="Backer color for tile ${t.name}">`:"—"}</td><td>${!t.fits?"Too big":(t.role==="addition"?"Back down":t.role==="base"?"Face down":"")+(t.turn?(t.role?", turned":"Turned 90°"):(t.role?"":"As shown"))}</td></tr>`).join("")+
+    model.borders.map(t=>`<tr><td><b>${t.name}</b></td><td class="n">${t.bw.toFixed(1)} × ${t.bh.toFixed(1)}</td><td class="n">—</td><td class="n">≈ ${Math.round(t.grams)} g</td><td>—</td><td>—</td><td>${!t.fits?"Too big":t.turn?"Turned 90°":"Flange down"}</td></tr>`).join("");
 
+  { const cc=colorCounts(), box=$("colormap");
+    if(box){ box.hidden=!cc.length; box.innerHTML=cc.length?`<div class="cm-head"><b>Photo design</b> · ${cc.reduce((a,c)=>a+c.n,0)} cells in ${cc.length} colors. Backer chips needed:</div><div class="cm-list">${cc.map(c=>`<span class="cm-item"><i style="background:${c.hex}"></i>${c.id} · ${c.name} <b>× ${c.n}</b></span>`).join("")}</div>`:""; } }
   const W=[], maxw=Math.max(P.gw,P.iw);
   const big=tiles.concat(model.borders).filter(t=>!t.fits);
   if(big.length) W.push(`Tile${big.length>1?"s":""} ${big.map(t=>t.name).join(", ")} won't fit the bed. Reduce the edge margin, use a smaller cell size, or switch to straight seams.`);
@@ -919,12 +1059,24 @@ function render(){
   if(P.fm&&model.borders.length&&P.b<8) W.push("The frame bar is too narrow to hide its wall standoffs. Use a border of at least 8 mm.");
   else if(P.fm&&model.borders.length&&model.borders.some(b=>!(b.feet||[]).length)) W.push("Some frame pieces are too short for a standoff, so they hang only from the tiles. Use a longer panel or fewer frame splits.");
 
+  if($("mount").value==="fit"){
+    if(!P.fit) W.push("Furniture clips need the separate frame and a zigzag or lap seam.");
+    else if(P.b<8) W.push("The frame bar is too narrow to hide the spring clips. Use a border of at least 8 mm.");
+    else if(model.borders.some(b=>!(b.clips||[]).length)) W.push("Some frame pieces are too short for a clip. Use a bigger panel or fewer frame splits.");
+    const g=(P.op-Math.max(P.W,P.H))/2;
+    if(g<1) W.push(`The panel is only ${g.toFixed(1)} mm smaller than the opening on each side. Leave 1.5–3 mm per side (panel = opening − 4 mm) so it slides in.`);
+    if(g>4) W.push(`A ${g.toFixed(1)} mm gap per side is more than the clips can reach comfortably. Make the panel closer to the opening (opening − 4 mm).`);
+    if(P.zig&&!P.lap) W.push("In a shelf there is no wall behind the tiles, so they hang from the frame. Use lap seams (One solid panel) so the panel locks into one piece.");
+    if(Math.abs(P.W-P.H)>1) W.push("Cube shelf openings are square: set Width and Height to the same size.");
+  }
   if(P.flt>0&&!P.fm) W.push("Float off the wall needs a wall mount (Wall pegs or Frame only) and the separate frame.");
   if($("mount").value==="frame"&&!P.fm) W.push("Frame only needs the separate frame and a zigzag or lap seam.");
   if($("mount").value==="frame"&&P.zig&&!P.lap) W.push("Frame only holds tiles by their edges. With zigzag seams the middle tiles have nothing to hang on; use Wall pegs, or lap seams so the panel locks into one piece.");
   {const CV=COVE(P); if(CV.want&&!CV.on) W.push(P.b<CV.need?`The LED cove needs a border of at least ${CV.need.toFixed(1)} mm for a ${P.lw} mm strip (cove plus room for the snap pegs). Widen the border or use a narrower strip; the cove is off for now.`:`The LED cove needs a frame at least ${CV.depthNeed} mm deep. Raise Frame height; the cove is off for now.`);
    if(P.cove&&P.flt===0&&P.fm) W.push("The LED cove only applies when the frame floats off the wall. Set Float off wall to 15–25 mm.");}
   if(P.flt>40) W.push(`A ${P.flt} mm float puts a lot of leverage on each standoff screw. 15–25 mm is plenty for LED strip.`);
+  if(P.bk&&!P.wall) W.push("Colored backers sit on the wall pucks, so they need Swappable tiles (Wall pegs mount).");
+  if(twoColor(P)) W.push("Inserts and grid are different colors, so each tile exports as two parts for an AMS print. That adds print time and purge waste.");
   if(P.wall&&P.lap) W.push("Lap seams overlap, so an addition tile can only come off after its base neighbors. To swap any tile on its own, set Seam style to Zigzag.");
   if(P.wall){const few=tiles.filter(t=>(t.sockets||0)<2); if(few.length) W.push(`Tile${few.length>1?"s":""} ${few.map(t=>t.name).join(", ")} got fewer than 2 sockets (not enough room clear of the border). Use a smaller cell size or a larger panel.`);}
   if($("mount").value==="cleat"&&!P.mount) W.push("The hidden wall mount needs the separate border, so it's off. Turn on \"Print border separately\" and use a lap or zigzag seam.");
@@ -952,18 +1104,19 @@ function boxTris(p,z0,z,out){
   for(let i=1;i<n-1;i++){out.push([T[0],T[i],T[i+1]],[B[0],B[i+1],B[i]]);}
   for(let i=0;i<n;i++){const j=(i+1)%n;out.push([B[i],B[j],T[j]],[B[i],T[j],T[i]]);}
 }
-function tileTris(t){
-  const out=[];
+function tileTris(t,only){
+  const out=[], keep=bx=>!only||(only==="ins"?bx.kind==="i":bx.kind!=="i");
   if(t.role==="addition"){
     // printed back-side down so the lap layer and teeth build up from the bed without supports
     const Z=t.top, map=(x,y)=>{const lx=x-t.bx0, ly=(t.by0+t.bh)-y; return t.turn?[ly,t.bw-lx]:[lx,ly];};
-    for(const bx of t.boxes) boxTris(bx.pts.map(q=>map(q[0],q[1])),Z-bx.z,Z-(bx.z0||0),out);
+    for(const bx of t.boxes) if(keep(bx)) boxTris(bx.pts.map(q=>map(q[0],q[1])),Z-bx.z,Z-(bx.z0||0),out);
     return out;
   }
   const map=(x,y)=>{const lx=x-t.bx0, ly=y-t.by0; return t.turn?[ly,t.bw-lx]:[lx,ly];};
-  for(const bx of t.boxes) boxTris(bx.pts.map(q=>map(q[0],q[1])),bx.z0||0,bx.z,out);
+  for(const bx of t.boxes) if(keep(bx)) boxTris(bx.pts.map(q=>map(q[0],q[1])),bx.z0||0,bx.z,out);
   return out;
 }
+function twoColor(P){return P.cIns&&P.cGrid&&P.cIns.toLowerCase()!==P.cGrid.toLowerCase()&&P.pat!=="kikko";}
 function plateTris(plates,P){
   const out=[], gap=5, maxX=P.bx-2*P.mg; let x=0,y=0,rowH=0;
   for(const pl of plates){
@@ -1040,13 +1193,19 @@ function readme(){
     if(P.flt>0&&CV.on) steps.push(`Backlight: press a ${P.lw} mm LED strip into the cove on the back of each frame piece, LEDs facing the wall (cove is ${CV.gW.toFixed(1)} mm wide x ${CV.gD} mm deep, so the strip sits below the surface). The cove runs the full length of every side; at each corner a small wire channel links one side to the next. Cut the strip at its marked cut points near each corner and join the pieces with a short strip-to-strip jumper wire laid in the channel. Leave a short tail at one bottom corner and run the cable out through the ${P.flt} mm gap. The light bounces off the wall: a halo around the frame and a glow through the lattice, with no strip visible. COB strip gives an even line with no dots.`);
     if(model.borders.length) steps.push(`Frame: screw the ${nf} frame standoffs to the wall over the orange boxes, long side along the frame edge, pegs pointing out. Press each frame piece onto its standoffs until the pegs click. The standoffs sit entirely behind the frame bar and each screw head tucks into a pocket in the frame's back, so nothing shows. The frame stands ${(Wd.zw-Wd.fd).toFixed(0)} mm off the wall.`);
     if(P.wall) steps.push(`Tiles: screw a round puck over each blue circle (the screw goes down the middle of the hollow peg). Press each tile in: it pushes onto its two puck pegs, and outer tiles also click onto the frame's snap pegs. Each puck hides completely behind the round hub on the back of its tile. Zigzag edges nest with the neighbors.`);
+    if(P.wall&&P.bk) steps.push(`Backers: each tile has a thin colored backer (backer_<tile>.stl, 0.8 mm, print flat in any color; translucent white glows with LED light). Before pressing a tile in, slide its backer over that tile's two pucks so it rests on the puck shoulders, then press the tile in. To change color later, pop the tile out and swap the backer.`);
     if(P.wall) steps.push(`Level the seams: lay a straightedge across each seam. If one tile sits lower than its neighbor (walls are rarely flat), loosen that puck's screw a turn, slide a shim in behind it (the slot fits around the screw), and retighten. Notches on the shims mark thickness: 1 = 0.4 mm, 2 = 0.8 mm, 3 = 1.2 mm. Stack them if needed.`);
     if(!P.wall) steps.push(`Hang the panel: with the tiles assembled face down, lift the whole panel and press it onto the standoffs until the frame pegs click.`);
     if(P.wall) steps.push(`Swap or add later: pull any tile straight out (outer tiles release from the frame with a firm pull) and press another in. The frame stays on the wall. Tiles float ${Wd.T.toFixed(0)} mm off the wall.`);
     if(P.flt>0&&!CV.on) steps.push(`Backlight: there is a ${P.flt} mm gap behind the frame. Stick an LED strip to the wall about 25 mm inside the frame outline (behind the outer tiles), routing around the pucks. Run the cable out through the bottom gap.`);}
+  if(P.fit){const n=allClips().length;
+    steps.push(`Measure the cube opening (inside width) in two places and use the smaller number. This panel was built for a ${P.op} mm opening; it is ${P.W} x ${P.H} mm, leaving ${((P.op-P.W)/2).toFixed(1)} mm each side.`);
+    steps.push(`Assemble the panel face down (lap seams lock it into one piece). Press the ${n} spring clips (furniture_clips_x${n}.stl) onto the back of the frame pieces until their pegs click, leaves pointing outward.`);
+    steps.push(`Push the panel into the cube, back first, until the frame is flush with the shelf face: the leaves flex in and hold it by friction, hidden behind the frame. To remove, grip two opposite frame edges and pull straight out. If it is loose, print the clips again with a larger opening value; if too tight, smaller.`);}
   if(P.mount){const C=cleatDims(P), n=model.borders.filter(b=>b.hook).length;
     steps.push(`Hang it: print wall_template.svg at 100% (actual size), tape it to the wall with its top line level, and drill the ${n*2} red crosses. Screw the ${n} printed wall cleats on, open lip facing up (#8 pan-head screws with anchors). Press a hook block onto the back of each top frame piece until its pegs click. Lift the panel, hold it flat against the wall about 15 mm above its final spot, and lower it: the hidden hooks drop behind the cleat lips. The panel stands ${model.borders[0].top.toFixed(0)} mm off the wall and nothing shows.`);}
-  if(!P.fm) steps.push(P.zig?"Flip the panel carefully, supporting the middle, and hang it. Fit is set by Fit clearance: if teeth, keys or pegs are too tight, raise it 0.05 mm; if loose, lower it.":"Lightly sand the front of each seam, then finish.");
+  if(!P.fm&&!P.fit) steps.push(P.zig?"Flip the panel carefully, supporting the middle, and hang it. Fit is set by Fit clearance: if teeth, keys or pegs are too tight, raise it 0.05 mm; if loose, lower it.":"Lightly sand the front of each seam, then finish.");
+  if(twoColor(P)) steps.unshift(`Two-color lattice: each tile comes as tile_<name>_grid.stl and tile_<name>_inserts.stl. In Bambu Studio, select both files for a tile, right-click → Assemble, then give the inserts part your second filament (AMS). Expect longer prints and some purge waste from the color changes.`);
   return `KUMIKO FRAME — ${P.W} x ${P.H} mm, pattern: ${$("pat").selectedOptions[0].text}
 Cell ${P.cell} mm · grid bar ${P.gw} x ${P.gh} mm · infill bar ${P.iw} x ${P.ih} mm · border ${P.b} mm x ${P.fh} mm
 Seams: ${seamName}
@@ -1076,8 +1235,12 @@ async function exportZip(list,label){
     if(typeof JSZip==="undefined") throw {message:"The zip library didn't load. Reload the page and try again."};
     const zip=new JSZip(), {P}=model;
     const parts3mf=[];
-    const add=(name,tris)=>{ zip.file(`${name}.stl`, stl(tris,name)); parts3mf.push({name,tris}); };
-    for(const t of list) add(`tile_${t.name}`, tileTris(t));
+    const add=(name,tris)=>{ zip.file(`${name}.stl`, stl(tris,name)); if(tris&&tris.length) parts3mf.push({name,tris}); };
+    for(const t of list){
+      if(twoColor(P)){ add(`tile_${t.name}_grid`, tileTris(t,"grid")); add(`tile_${t.name}_inserts`, tileTris(t,"ins")); }
+      else add(`tile_${t.name}`, tileTris(t));
+      if(t.backer&&t.backer.length) add(`backer_${t.name}`, backerTris(t));
+    }
     if(list.length===model.tiles.length && model.plates.length) add("splice_plates", plateTris(model.plates,P));
     if(list.length===model.tiles.length) for(const bp of model.borders) add(bp.name.replace(" ","_").toLowerCase(), borderTris(bp));
     if(list.length===model.tiles.length && model.keys.length) add(`bowtie_keys_x${model.keys.length}`, keyTris(model.keys.length,P,model.K));
@@ -1088,18 +1251,17 @@ async function exportZip(list,label){
         if(typeof LetterPages!=="undefined") zip.file("wall_template_letter_pages.html", LetterPages.buildPrintHtml(svg,{W:P.W,H:P.H}));}
       {const nf=allFeet().filter(f=>f.boxes).length; if(nf) add(`frame_standoffs_x${nf}`, standoffTris(P));}
     }
-    if(list.length===model.tiles.length&&model.P.mount){const n=model.borders.filter(b=>b.hook).length; if(n){add(`wall_cleats_x${n}`, cleatTris(n,P)); add(`cleat_hooks_x${n}`, hookTris(P)); zip.file("wall_template.svg", wallTemplateSVG());}}
+    if(list.length===model.tiles.length&&model.P.fit){const n=allClips().length; if(n) add(`furniture_clips_x${n}`, clipTris(P));}
+    if(list.length===model.tiles.length&&model.P.mount){const n=model.borders.filter(b=>b.hook).length; if(n){add(`wall_cleats_x${n}`, cleatTris(n,P)); add(`cleat_hooks_x${n}`, hookTris(P));
+      const svg=wallTemplateSVG(); zip.file("wall_template.svg", svg);
+      if(typeof LetterPages!=="undefined") zip.file("wall_template_letter_pages.html", LetterPages.buildPrintHtml(svg,{W:P.W,H:P.H}));}}
     zip.file("layout.svg", layoutSVG()); zip.file("README.txt", readme());
-    if(typeof Bambu3mf!=="undefined" && parts3mf.length){
+    if(model.cellColors){ zip.file("cell_color_map.svg", cellMapSVG()); zip.file("chip_counts.txt", colorCounts().map(c=>`${c.id}\t${c.name}\t${c.n}`).join("\n")+"\n"); }
+    if(typeof ThreeMF!=="undefined" && parts3mf.length){
       st.textContent="Building Bambu Studio .3mf…";
-      const template=await loadBambuTemplate();
-      for(const p of parts3mf) p.obj_settings=Bambu3mf.latticeObjectSettings(P, p.name);
-      const proj=Bambu3mf.latticeProjectOverrides(P);
-      const bed=proj._bed; delete proj._bed;
-      const pack=Bambu3mf.buildBambuPackage(parts3mf, proj, {bed, template});
-      const mf=new JSZip();
-      for(const [n,d] of Object.entries(pack.files)) mf.file(n,d);
-      zip.file(`living_lattice_${P.W}x${P.H}.3mf`, await mf.generateAsync({type:"uint8array",compression:"DEFLATE"}));
+      const bed=[P.bx||256, P.by||256];
+      const r=ThreeMF.buildPanel3mf(parts3mf,{bed, title:`Living Lattice ${P.W}x${P.H}`});
+      zip.file(`living_lattice_${P.W}x${P.H}.3mf`, r.buffer);
     }
     const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE"});
     st.textContent="Waiting for you to confirm the save…";
@@ -1111,14 +1273,6 @@ async function exportZip(list,label){
       (c==="unavailable"||c==="not_granted")?"Saving isn't available in this view. Open the page in claude.ai.":("Export failed: "+(err&&err.message||err));
   }
 }
-let _bambuTemplate=null;
-async function loadBambuTemplate(){
-  if(_bambuTemplate) return _bambuTemplate;
-  const r=await fetch("cli/bambu_profile_template.json");
-  if(!r.ok) throw {message:"Couldn't load the Bambu print-settings template (cli/bambu_profile_template.json)."};
-  _bambuTemplate=await r.json();
-  return _bambuTemplate;
-}
 
 /* ---------- wiring ---------- */
 let tmr; const queue=()=>{clearTimeout(tmr);tmr=setTimeout(build,120)};
@@ -1129,9 +1283,36 @@ ids.forEach(id=>$(id).addEventListener("input",()=>{
 }));
 // the simple controls drive the advanced ones
 $("size").addEventListener("input",()=>{$("cell").value=$("size").value;queue();});
-$("style").addEventListener("input",()=>{const solid=$("style").value==="solid";$("styleHint").textContent=solid?"Tiles lock into one panel with half-lap teeth and hang from the frame. Fewer holes in the wall.":"Pop any tile out from the front to swap or add to the design.";$("seam").value=solid?"lap":"zig";$("mount").value=solid?"frame":"pegs";queue();});
+$("style").addEventListener("input",()=>{const solid=$("style").value==="solid";if(solid)$("bk").checked=false;$("styleHint").textContent=solid?"Tiles lock into one panel with half-lap teeth and hang from the frame. Fewer holes in the wall.":"Pop any tile out from the front to swap or add to the design.";$("seam").value=solid?"lap":"zig";$("mount").value=solid?"frame":"pegs";queue();});
+// "Made for": furniture-ready sizes. Headboard widths: mattress width + a few inches (Casper's headboard guide).
+const MADE={wall:null,cube:{cube:true},"hb-twin":{W:1040},"hb-full":{W:1420},"hb-queen":{W:1575},"hb-cal":{W:1880},"hb-king":{W:2030}};
+function applyMade(){
+  const m=$("made").value, d=MADE[m]; $("opWrap").hidden=m!=="cube";
+  if(!d){ if($("mount").value==="fit"){$("mount").value=$("style").value==="solid"?"frame":"pegs";} queue(); return; }
+  if(d.cube){const op=+$("op").value||335; $("W").value=$("H").value=op-4; $("style").value="solid"; $("seam").value="lap"; $("mount").value="fit"; $("styleHint").textContent="Tiles lock into one panel with half-lap teeth and hang from the frame."; $("bk").checked=false; $("led").checked=false; $("flt").value=0; $("cove").checked=false; if(+$("b").value===19)$("b").value=10;}
+  else { $("W").value=d.W; $("H").value=610; if($("mount").value==="fit") $("mount").value=$("style").value==="solid"?"frame":"pegs"; }
+  $("madeHint").textContent=d.cube?"Presses into a cube shelf opening (KALLAX-type) on hidden spring clips. Measure your opening and enter it.":`Headboard: ${$("W").value} mm wide x 610 mm tall. Mount it with the bottom edge 50–100 mm behind the mattress top. LED backlight makes a good reading glow.`;
+  queue();
+}
+$("made").addEventListener("input",applyMade);
+$("op").addEventListener("input",()=>{if($("made").value==="cube"){$("W").value=$("H").value=(+$("op").value||335)-4;}});
 $("led").addEventListener("input",()=>{const on=$("led").checked, b=+$("b").value;$("flt").value=on?20:0;$("cove").checked=on;if(on&&b<19)$("b").value=19;if(!on&&b===19)$("b").value=10;queue();});
-$("tiles").addEventListener("click",e=>{const tr=e.target.closest("tr");if(!tr)return;selected=+tr.dataset.i;render();});
+$("photo").addEventListener("change",e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  const rd=new FileReader(); rd.onload=()=>{ const im=new Image(); im.onload=()=>{
+    const P=readParams(), w=Math.max(40,Math.round(P.W/2)), h=Math.max(30,Math.round(P.H/2)), c=document.createElement("canvas"); c.width=w; c.height=h;
+    const g=c.getContext("2d"), r=Math.max(w/im.width,h/im.height); // cover the panel, centered
+    g.drawImage(im,(w-im.width*r)/2,(h-im.height*r)/2,im.width*r,im.height*r);
+    photo={w,h,data:g.getImageData(0,0,w,h).data}; $("look").checked=true; build(); };
+    im.src=rd.result; }; rd.readAsDataURL(f);
+});
+$("photoClear").addEventListener("click",()=>{photo=null; $("photo").value=""; build();});
+$("tiles").addEventListener("change",e=>{
+  const s=e.target.closest("[data-ins]"), c=e.target.closest("[data-bk]");
+  if(s){const m=parseMap($("ins").value); m[s.dataset.ins]=s.value; $("ins").value=mapStr(m); queue();}
+  if(c){const m=parseMap($("bkc").value); m[c.dataset.bk]=c.value; $("bkc").value=mapStr(m); queue();}
+});
+$("tiles").addEventListener("click",e=>{if(e.target.closest("select,input"))return;const tr=e.target.closest("tr");if(!tr)return;selected=+tr.dataset.i;render();});
 $("tiles").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){const tr=e.target.closest("tr");if(!tr)return;e.preventDefault();selected=+tr.dataset.i;render();}});
 $("exportAll").addEventListener("click",()=>exportZip(model.tiles,`kumiko-frame-${model.P.W}x${model.P.H}.zip`));
 $("exportTest").addEventListener("click",async()=>{
@@ -1149,4 +1330,15 @@ $("exportOne").addEventListener("click",()=>{const t=model.tiles[selected];expor
 window.addEventListener("resize",()=>model&&render());
 try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>model&&render());}catch(e){}
 new MutationObserver(()=>model&&render()).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+// Links from the landing page: builder.html?preset=queen (or #queen inside an artifact, where the query string doesn't arrive).
+// wall-led | cube (alias kallax) | twin | full | queen | cal | king | starter
+(function applyLinkPreset(){
+  let key="";
+  try{ key=(new URLSearchParams(location.search).get("preset")||"").toLowerCase(); if(!key) key=(location.hash||"").slice(1).toLowerCase(); }catch(e){}
+  const hb={twin:"hb-twin",full:"hb-full",queen:"hb-queen",cal:"hb-cal","cal-king":"hb-cal",king:"hb-king"};
+  if(key==="cube"||key==="kallax"){ $("made").value="cube"; applyMade(); }
+  else if(hb[key]){ $("made").value=hb[key]; applyMade(); }
+  else if(key==="wall-led"){ $("made").value="wall"; $("led").checked=true; $("led").dispatchEvent(new Event("input")); }
+  else if(key==="starter"){ $("made").value="wall"; $("W").value=600; $("H").value=400; $("pat").value="asanoha"; }
+})();
 build();

@@ -57,8 +57,8 @@ function loadEngine(overrides = {}) {
   // top-level let/const/function in engine.js live in the context's script scope; expose them
   const api = vm.runInContext(`({
     get model(){return model}, build, readParams, testKit, readme, layoutSVG, stl,
-    tileTris, borderTris, plateTris, keyTris, puckTris, cleatTris, standoffTris, pegTemplateSVG, wallTemplateSVG,
-    allFeet, WALL, SNAP, COVE, cleatDims, shimTris, shimCount, lattice
+    tileTris, borderTris, plateTris, keyTris, puckTris, cleatTris, hookTris, standoffTris, pegTemplateSVG, wallTemplateSVG,
+    allFeet, WALL, SNAP, COVE, cleatDims, shimTris, shimCount, lattice, backerTris, twoColor, BACKER, insertSegs, FITCLIP, allClips, clipTris
   })`, sandbox);
   api.vals = vals;
   api.rebuild = (more = {}) => { Object.assign(vals, more); api.build(); return api.model; };

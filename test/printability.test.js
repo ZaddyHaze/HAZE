@@ -11,6 +11,7 @@ const CONFIGS = [
   { name: "lap + wall pegs", set: { seam: "lap", mount: "pegs", flt: 0 } },
   { name: "lap + frame only", set: { seam: "lap", mount: "frame", flt: 0 } },
   { name: "zigzag, no mount", set: { seam: "zig", mount: "none", flt: 0 } },
+  { name: "cube shelf insert (furniture clips)", set: { seam: "lap", mount: "fit", W: 331, H: 331, op: 335, bk: false, flt: 0 } },
   { name: "zigzag, rotated, no snap", set: { seam: "zig", mount: "pegs", flt: 0, rot: true, snap: false } },
 ];
 for (const cfg of CONFIGS) for (const pat of PATTERNS) {

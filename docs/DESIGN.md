@@ -28,7 +28,7 @@ makeTiles(P, L, Lt)   assign cells to tiles, build bars clipped to each tile's o
 makeBorders(P, Lt, pegPts, sockets)
                       frame pieces: bar + backing lattice + snap pegs + feet / standoffs + LED cove
 render()              canvas preview, tile table, warnings
-exportZip()           STLs + SVG templates + README + Bambu .3mf into a zip
+exportZip()           STLs + SVG templates + README + living_lattice_WxH.3mf into a zip
 testKit(P)            small fit coupons at clearances 0.05 / 0.10 / 0.15 / 0.20 mm
 ```
 
@@ -76,6 +76,27 @@ Every part prints flat-side down with no overhang it can't bridge, and no wall h
 `COVE(P)`: channel in the back of the bar, `off = 1.6` from the outer edge, width `gW = lw + 0.6`, depth `gD = 3`. T/B channels stop 1.6 mm short of the frame's outer ends (no notch in the side); at each corner a 3.5 mm wire channel links them to the L/R channels, so every bit of the channel ceiling bridges between two walls. The strip is cut at each corner and joined with a jumper wire.
 Requires: floating frame (`flt > 0`), a wall mount, separate frame, `b ≥ off + gW + 2·(pin/2 + 0.35 + 1.0)` (≈ 18.4 mm for a 10 mm strip with 3.5 mm pegs) and `fd ≥ gD + 3`. Otherwise it switches off and warns.
 
+### Inserts, backers and color
+- **Per-tile inserts** (`P.ins`, map tile name → insert): on mixable triangle patterns (asanoha, mitsukude, sankaku) each tile can carry a different insert; the grid stays continuous so seams still land on bars. `insertSegs()` defines each insert. Sakura and goma are NOT built yet: add them only from a verified construction reference.
+- **Backers** (`P.bk`, wall-peg mode only): 0.8 mm plate per tile at `z = gh + bt` (behind the frame's backing lattice), cut to the tile's cells (inset 0.12 mm) with 16-gon holes for the puck pegs (hidden behind the hubs). Pucks gain a shoulder (r = puckR + 2) that the backer rests on. Exported as `backer_<tile>.stl`, printed flat in any color.
+- **Colors** (`cFrame`, `cGrid`, `cIns`, `cBack`, per-tile `bkc`) drive the "finished colors" preview only. When the insert color differs from the grid color, each tile exports as `_grid` and `_inserts` parts for an AMS print (`twoColor()`).
+
+### Furniture fit (`mount = "fit"`)
+For panels that press into furniture instead of hanging on a wall (cube-shelf inserts such as KALLAX).
+- `FITCLIP(P)`: clip body 24 mm long, `t = 5` mm deep, behind the frame bar, with two square snap pegs (±7 mm) into blind sockets in the bar (same `SNAP` geometry as the standoffs). Needs `b ≥ 8`.
+- Two leaves per clip, 16 mm long, 1.4 mm thick, angle out from the body ends and end `reach = (op − W)/2 + 0.8` mm beyond the frame's outer edge (0.8 mm preload). They stand as vertical walls in print, so they flex along the layers.
+- Leaves stay inside their own piece's span (≥ 3 mm from its ends), so leaves of neighbouring pieces never meet at a corner.
+- Panel size = measured opening − 4 mm (2 mm gap per side). Warnings below 1 mm or above 4 mm gap, and for zigzag seams (nothing behind the tiles in a shelf, so use lap).
+- Builder presets ("Made for"): cube insert (opening 335 mm default — the user measures), headboards Twin 1040 / Full 1420 / Queen 1575 / Cal King 1880 / King 2030 × 610 mm.
+
+### Cell accessories (`src/accessories.js`, separate plain script)
+Cell-local frame: origin at the cell's incenter, same z as the panel. All parts fit the modular cell from `cli/cell-coupon.js` (grid bar `gw`, back ledge steps `LEDGE`).
+- **Cell plug**: front part `z 0 … 4.0` fills the opening (inradius `R0 − gw/2 − fit`), then three neck steps that mirror the ledge with 0.1 mm clearance. Prints face down; the steps narrow upward, so no overhangs.
+- **Magnet chip**: plug with a sealed pocket for an 8 × 2 mm disc: 0.6 mm front skin, pocket Ø8.15 × 2.2, cap above. Pause the print at 2.8 mm and drop the magnet in. Polarity: mark the face if accessories carry magnets; steel discs avoid the issue.
+- **Cleat plug**: a 45° groove in the plug face, 21 mm wide, 2.6 mm tall at the face, 3 mm deep, sloping down toward the wall. Placed where the triangle is wide enough (`cleatY`); needs 40 mm cells or larger (returns null for 30 mm).
+- **Bud vase holder**: 20.4 mm wide plate (spine 3 mm) with a collar at the top and a cup with a floor at the bottom, for a 16 × 100 mm glass test tube (bore Ø16.8). Its tongue (full width, so it prints from the bed) drops into the cleat groove; weight pulls it tighter; lift up and out to remove. Prints on its side; the bore is a circle up to 0.707 r, then a 45° roof, capped flat at r + 0.2 (short bridge), so it holds a round tube without supports.
+- Accessories need horizontal grid lines (pattern not rotated 90°).
+
 ## 5. Invariants (tests enforce these)
 1. No two parts overlap in 3D in the assembled state — tiles, frame pieces, standoffs, puck footprints.
 2. Every tile and frame piece fits the bed (`fits`).
@@ -83,7 +104,8 @@ Requires: floating frame (`flt > 0`), a wall mount, separate frame, `b ≥ off +
 4. The LED cove is open end to end, has a floor, and nothing covers it.
 5. Each tile gets ≥ 2 wall sockets in wall-peg mode; puck footprints never overlap.
 6. No part needs supports in its print orientation (bridges ≤ 16 mm, ledges ≤ 0.6 mm).
-7. No puck, standoff or screw is visible through the lattice from the front.
+7. No puck, standoff, clip or screw is visible through the lattice from the front.
+8. Accessories: magnet pocket sealed on both faces; plugs never collide with the cell; the vase tongue seats without touching, is blocked when pulled straight out, and releases when lifted along the slope; a 16 mm tube passes the collar and rests on the cup floor.
 
 ## 6. Printing (Bambu P2S)
 0.4 nozzle, 0.2 mm layers, PLA or PETG on textured PEI, 5 mm brim. Bars must print solid: wall loops enough to fill the bar width. Tiles: face down. Lap additions, frame pieces: as exported (already flipped). Standoffs and pucks: wall side down. Use PETG for the frame if the LED strip runs above ~10 W/m.
@@ -93,5 +115,11 @@ Requires: floating frame (`flt > 0`), a wall mount, separate frame, `b ≥ off +
 - **Slotted puck / standoff screw holes**: ±2 mm adjustment for imperfect drilling.
 - **Backlight seam leak**: seam gaps (≈ fc) glow under LED backlight; consider a stepped seam or a diffuser layer.
 - **Borderless edge option**: so a panel can grow outward later without new frame pieces.
-- **3MF export with print settings** (done): CLI and web Export write `living_lattice_WxH.3mf` via `cli/bambu-3mf.js` — 0.2 mm layers, 4 walls, mouse-ear brim on tiles/frame, no brim on hardware, supports off, X-Y hole/contour compensation 0.
 - **Mesh boolean cleanup**: export each part as one manifold (e.g. via manifold-3d) instead of overlapping prisms.
+
+## 8. Panel 3MF export (`cli/threemf.js`)
+CLI (`node cli/generate.js`) and the builder Export zip both write `living_lattice_WxH.3mf` via `ThreeMF` / `writePanel3mf`:
+- Per-object: `layer_height` 0.2, `wall_loops` 4, `enable_support` 0, `xy_hole_compensation` 0, `xy_contour_compensation` 0
+- `brim_type` `brim_ears` on tiles, borders, backers, splice plates; `no_brim` on pucks, shims, standoffs, keys, clips, cleats/hooks
+- One plate per large part (tiles near bed-sized); smaller hardware packed onto shared plates when it fits
+- CLI: `--no-3mf` skips the project. Wall mount also writes letter-page wall templates (`cli/letter-pages.js`).

@@ -10,11 +10,7 @@
 const fs = require("fs");
 const path = require("path");
 const { loadEngine } = require("./load-engine");
-const {
-  writeBambu3mf,
-  latticeObjectSettings,
-  latticeProjectOverrides,
-} = require("./bambu-3mf");
+const { writePanel3mf } = require("./threemf");
 const { writeLetterPages } = require("./letter-pages");
 
 const args = process.argv.slice(2);
@@ -27,7 +23,7 @@ for (let i = 0; i < args.length; i++) {
   else if (a === "--out") out = args[++i];
   else if (a === "--test-kit") testOnly = true;
   else if (a === "--no-3mf") want3mf = false;
-  else if (a === "-h" || a === "--help") { console.log(fs.readFileSync(__filename, "utf8").split("\n").slice(1, 9).join("\n")); process.exit(0); }
+  else if (a === "-h" || a === "--help") { console.log(fs.readFileSync(__filename, "utf8").split("\n").slice(1, 10).join("\n")); process.exit(0); }
   else { console.error("Unknown argument: " + a); process.exit(1); }
 }
 function coerce(v) { return v === "true" ? true : v === "false" ? false : v; }
@@ -50,10 +46,16 @@ if (testOnly) {
 const parts3mf = [];
 function addPart(name, tris) {
   write(`${name}.stl`, E.stl(tris, name));
-  if (want3mf) parts3mf.push({ name, tris, obj_settings: latticeObjectSettings(P, name) });
+  if (want3mf && tris && tris.length) parts3mf.push({ name, tris });
 }
 
-for (const t of m.tiles) addPart(`tile_${t.name}`, E.tileTris(t));
+for (const t of m.tiles) {
+  if (E.twoColor(P)) {
+    addPart(`tile_${t.name}_grid`, E.tileTris(t, "grid"));
+    addPart(`tile_${t.name}_inserts`, E.tileTris(t, "ins"));
+  } else addPart(`tile_${t.name}`, E.tileTris(t));
+  if (t.backer && t.backer.length) addPart(`backer_${t.name}`, E.backerTris(t));
+}
 if (m.plates.length) addPart("splice_plates", E.plateTris(m.plates, P));
 for (const bp of m.borders) addPart(bp.name.replace(" ", "_").toLowerCase(), E.borderTris(bp));
 if (m.keys.length) addPart(`bowtie_keys_x${m.keys.length}`, E.keyTris(m.keys.length, P, m.K));
@@ -72,14 +74,29 @@ if (P.fm) {
   const nf = E.allFeet().filter(f => f.boxes).length;
   if (nf) addPart(`frame_standoffs_x${nf}`, E.standoffTris(P));
 }
+if (P.fit) { const n = E.allClips().length; if (n) addPart(`furniture_clips_x${n}`, E.clipTris(P)); }
+if (P.mount) {
+  const n = m.borders.filter(b => b.hook).length;
+  if (n) {
+    addPart(`wall_cleats_x${n}`, E.cleatTris(n, P));
+    addPart(`cleat_hooks_x${n}`, E.hookTris(P));
+    const svg = E.wallTemplateSVG();
+    write("wall_template.svg", svg);
+    const pages = writeLetterPages(out, svg, { W: P.W, H: P.H });
+    if (pages.pdf) console.log(`  ${path.basename(pages.pdf)}  (${pages.pages} letter pages)`);
+    else console.log(`  ${path.basename(pages.html)}  (${pages.pages} letter pages; open in browser → Print → PDF)`);
+  }
+}
 write("layout.svg", E.layoutSVG());
 write("README.txt", E.readme());
 write("params.json", JSON.stringify(E.vals, null, 2));
 
 if (want3mf && parts3mf.length) {
-  const proj = latticeProjectOverrides(P);
-  const bed = proj._bed; delete proj._bed;
   const name = `living_lattice_${P.W}x${P.H}.3mf`;
-  writeBambu3mf(path.join(out, name), parts3mf, proj, { bed });
-  console.log(`  ${name}  (${parts3mf.length} objects, 0.2 mm / 4 walls / mouse-ear brim on tiles+frame)`);
+  const bed = [P.bx || 256, P.by || 256];
+  const r = writePanel3mf(path.join(out, name), parts3mf, {
+    bed,
+    title: `Living Lattice ${P.W}x${P.H}`,
+  });
+  console.log(`  ${name}  (${r.objects} objects on ${r.plates} plates, 0.2 mm / 4 walls / mouse-ear brim on tiles+frame)`);
 }

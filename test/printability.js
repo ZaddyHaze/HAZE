@@ -8,8 +8,10 @@ function printParts(E) {
     const flip = t.role === "addition";
     parts.push({ name: "tile " + t.name, boxes: t.boxes.map(b => flip ? { pts: b.pts, z0: t.top - b.z, z: t.top - (b.z0 || 0) } : { pts: b.pts, z0: b.z0 || 0, z: b.z }) });
   }
+  for (const t of m.tiles) if (t.backer) parts.push({ name: "backer " + t.name, boxes: t.backer.map(b => ({ pts: b.pts, z0: b.z0 - b.z0, z: b.z - b.z0 })) });
   for (const b of m.borders) parts.push({ name: b.name, boxes: b.boxes.map(x => ({ pts: x.pts, z0: b.top - x.z, z: b.top - (x.z0 || 0) })) });
   E.allFeet().filter(f => f.boxes).forEach((f, i) => parts.push({ name: "standoff " + (i + 1), boxes: f.boxes.map(x => ({ pts: x.pts, z0: Wd.zw - x.z, z: Wd.zw - x.z0 })) }));
+  { const top = Wd.fd + E.FITCLIP(m.P).t; m.borders.flatMap(b => b.clips || []).forEach((c, i) => parts.push({ name: "clip " + (i + 1), boxes: c.boxes.map(x => ({ pts: x.pts, z0: top - x.z, z: top - x.z0 })) })); }
   m.borders.filter(b => b.hook).forEach((b, i) => parts.push({ name: "hook " + (i + 1), boxes: b.hook.boxes.map(x => ({ pts: x.pts, z0: b.hook.zw - x.z, z: b.hook.zw - x.z0 })) }));
   return parts;
 }
@@ -58,6 +60,7 @@ function visibility(E, { samples = 400, rand = Math.random } = {}) {
   return {
     pucks: m.sockets.map(k => frac(circle(k.p, Wd.puckR))),
     feet: E.allFeet().map(f => frac(rectPts(f.rect))),
+    clips: m.borders.flatMap(b => b.clips || []).map(c => frac(rectPts(c.rect))),
     hooks: m.borders.filter(b => b.hook).flatMap(b => b.hook.boxes.filter(x => x.kind === "hk").map(x => frac(x.pts))),
   };
 }
