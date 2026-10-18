@@ -23,8 +23,9 @@ A wall panel of traditional kumiko lattice, 3D printed in bed-sized tiles on a B
 readParams()          read controls → P
 lattice(P)            cells (polygons + infill segments) and shared edges for the pattern
 candidates(P)         choose nx × ny tile grid so every tile fits the bed (turning tiles 90° if needed)
-makeTiles(P, L, Lt)   assign cells to tiles, build bars clipped to each tile's own cells ("territory"),
-                      seams (zig / lap / straight), hubs + peg holes, wall sockets, keys
+makeTiles(P, L, Lt)   assign cells to tiles (pattern-aware: assignCellTiles), build bars clipped to each
+                      tile's own cells ("territory"), seams (zig / lap / straight), hubs + peg holes,
+                      wall sockets, keys
 makeBorders(P, Lt, pegPts, sockets)
                       frame pieces: bar + backing lattice + snap pegs + feet / standoffs + LED cove
 render()              canvas preview, tile table, warnings
@@ -42,6 +43,8 @@ Key rule — **territory clipping**: every bar is clipped to the polygon of the 
 | `zig` (default) | Each tile keeps half-width bars on its side of the seam; tiles nest face to face. | Any tile removable on its own. Seam bars print at `gw/2`, so `gw` should halve to a multiple of 0.4 mm (2.4, 3.2). |
 | `lap` | Half-lap by depth: base tiles keep the front `gh/2`, addition tiles keep the back `gh/2` plus teeth at 30 % / 70 % of each seam edge, alternating direction. | Additions export flipped. In wall mode an addition can't come off before its base neighbors. |
 | `straight` | Glued rails + splice plates. | Legacy; not the product direction. |
+
+**Seams follow each pattern's grain** (`assignCellTiles`): one rectangular cut for every pattern looks wrong — asanoha wants horizontal joins on triangle base edges, kaku wants axis-aligned grid lines, kikkō must not grow half-bars on its invisible triangle grid (hex infill already meets at edge midpoints), and hishi keeps panel-space tiles so the diamond stairstep still fits the bed.
 
 ### Snap latch (shared everywhere)
 Default peg Ø3.5 mm: frame pegs print upright, so prongs flex across layer lines (the weak axis); 3.5 mm gives ~1.35 mm prongs. Recommend PETG for frame pieces.

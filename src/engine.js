@@ -88,16 +88,16 @@ function lattice(P){
     const h=s*Math.sqrt(3)/2, J=Math.ceil(R/h)+1, I=Math.ceil(R/s)+1;
     const v=(i,j)=>tf([i*s+j*s/2, j*h]);
     for(let j=-J;j<=J;j++)for(let i=-I-J;i<=I+J;i++){
-      for(const tri of [[v(i,j),v(i+1,j),v(i,j+1)],[v(i+1,j),v(i+1,j+1),v(i,j+1)]]){
+      for(const [k,tri] of [[0,[v(i,j),v(i+1,j),v(i,j+1)]],[1,[v(i+1,j),v(i+1,j+1),v(i,j+1)]]]){
         if(!inView(tri))continue;
         const c=[(tri[0][0]+tri[1][0]+tri[2][0])/3,(tri[0][1]+tri[1][1]+tri[2][1])/3];
         const infill=[];
-        for(let k=0;k<3;k++){
-          if(P.pat==="asanoha") infill.push([c,tri[k]]);
-          if(P.pat==="mitsukude"||P.pat==="kikko") infill.push([c,mid(tri[k],tri[(k+1)%3])]);
+        for(let e=0;e<3;e++){
+          if(P.pat==="asanoha") infill.push([c,tri[e]]);
+          if(P.pat==="mitsukude"||P.pat==="kikko") infill.push([c,mid(tri[e],tri[(e+1)%3])]);
         }
-        const ci=cells.length; cells.push({c,poly:tri,infill,kind:P.pat==="kikko"?"g":"i"});
-        for(let k=0;k<3;k++) addEdge(tri[k],tri[(k+1)%3],ci);
+        const ci=cells.length; cells.push({c,poly:tri,infill,kind:P.pat==="kikko"?"g":"i",i,j,k});
+        for(let e=0;e<3;e++) addEdge(tri[e],tri[(e+1)%3],ci);
       }
     }
   } else {
@@ -106,11 +106,48 @@ function lattice(P){
       const q=[v(i,j),v(i+1,j),v(i+1,j+1),v(i,j+1)];
       if(!inView(q))continue;
       const c=[(q[0][0]+q[2][0])/2,(q[0][1]+q[2][1])/2];
-      const ci=cells.length; cells.push({c,poly:q,infill:[],kind:"i"});
-      for(let k=0;k<4;k++) addEdge(q[k],q[(k+1)%4],ci);
+      const ci=cells.length; cells.push({c,poly:q,infill:[],kind:"i",i,j,k:0});
+      for(let e=0;e<4;e++) addEdge(q[e],q[(e+1)%4],ci);
     }
   }
   return {cells,edges:[...emap.values()],drawEdges:P.pat!=="kikko"};
+}
+
+/* Assign each lattice cell to a bed-sized tile so seams follow that pattern's grain —
+   not one shared rectangular cut for every pattern.
+   - Triangle (asanoha / mitsukude / sankaku / kikkō): rows follow lattice j so horizontal
+     seams sit on the triangle base edges; columns follow panel X (vertical zigzags).
+   - Square (kaku): remap lattice (i,j) onto the panel so cuts fall between grid lines —
+     seams are clean runs of horizontal or vertical edges.
+   - Diamond (hishi): stay with panel-space rectangles. A lattice-band tile is a 45° strip
+     whose AABB won't fit the bed; the seam is still on diamond edges (a regular 45°/135°
+     stairstep locked to the grid). */
+function assignCellTiles(P, Lt, L){
+  const n=Lt.cells.length;
+  if(!n||L.nx*L.ny<=1) return Lt.cells.map(()=>0);
+  const tileAt=(x,y)=>{
+    const c=Math.min(L.nx-1, Math.max(0, Math.floor(x/L.tw)));
+    const r=Math.min(L.ny-1, Math.max(0, Math.floor((P.H-y)/L.th)));
+    return r*L.nx+c;
+  };
+  if(P.pat==="hishi") return Lt.cells.map(cl=>tileAt(cl.c[0], cl.c[1]));
+  if(isTri(P.pat)){
+    const js=Lt.cells.map(cl=>cl.j), j0=Math.min(...js), j1=Math.max(...js);
+    const nj=Math.max(1, j1-j0+1);
+    return Lt.cells.map(cl=>{
+      const y=((j1-cl.j)+0.5)/nj*P.H;
+      return tileAt(cl.c[0], y);
+    });
+  }
+  // kaku (and any other square-grid pattern): lattice-aligned bands
+  const is=Lt.cells.map(cl=>cl.i), js=Lt.cells.map(cl=>cl.j);
+  const i0=Math.min(...is), i1=Math.max(...is), j0=Math.min(...js), j1=Math.max(...js);
+  const ni=Math.max(1, i1-i0+1), nj=Math.max(1, j1-j0+1);
+  return Lt.cells.map(cl=>{
+    const x=((cl.i-i0)+0.5)/ni*P.W;
+    const y=((j1-cl.j)+0.5)/nj*P.H;
+    return tileAt(x, y);
+  });
 }
 
 /* Liang–Barsky */
@@ -192,7 +229,8 @@ function makeTiles(P,L,Lt){
   for(let r=0;r<L.ny;r++)for(let c=0;c<L.nx;c++){
     tiles.push({r,c,x0:c*L.tw,x1:(c+1)*L.tw,y1:P.H-r*L.th,y0:P.H-(r+1)*L.th,boxes:[],name:String.fromCharCode(65+r)+(c+1)});
   }
-  const cellTile=Lt.cells.map(cl=>tileIdx(cl.c[0],cl.c[1]));
+  // Pattern-aware ownership: seams follow each lattice's grain (see assignCellTiles).
+  const cellTile=P.zig?assignCellTiles(P,Lt,L):Lt.cells.map(cl=>tileIdx(cl.c[0],cl.c[1]));
 
   const sides=[[[P.b,0],[1,0]],[[P.W-P.b,0],[-1,0]],[[0,P.b],[0,1]],[[0,P.H-P.b],[0,-1]]];
   function addBar(ti,a,b,w,h,kind,terr){
@@ -256,12 +294,13 @@ function makeTiles(P,L,Lt){
       const minGap=Math.max(55,P.cell*1.4);
       for(const v of cand){ if(pinPts.every(q=>Math.hypot(q[0]-v.p[0],q[1]-v.p[1])>=minGap)){pinPts.push(v.p);pinCells.push([...v.cells]);pinR.push([P.pin/2,P.hub/2,SNAP(P).on?(P.pin-P.fc)/2+SNAP(P).bd+0.1:0]);} }
     }
-    // bowtie keys: midpoints of seam edges (lap seams lock with their own teeth instead)
-    // (kept clear of the backing lattice and spaced apart)
+    // bowtie keys: midpoints of seam edges (lap seams lock with their own teeth instead).
+    // Kikkō skips them: zigzag half-bars aren't drawn on the invisible triangle grid, so there's
+    // no bar to pocket into — the hex pattern continues across the seam through the cell infill.
     const m=P.b+(P.sepb?depth:0)+8;
     const seams=Lt.edges.filter(ed=>ed.cells.length===2&&cellTile[ed.cells[0]]!==cellTile[ed.cells[1]]);
     seams.sort((a,b)=>(a.a[0]+a.b[0])-(b.a[0]+b.b[0])||(a.a[1]+a.b[1])-(b.a[1]+b.b[1]));
-    if(!P.lap&&!P.wall) for(const ed of seams){
+    if(!P.lap&&!P.wall&&P.pat!=="kikko") for(const ed of seams){
       const M=[(ed.a[0]+ed.b[0])/2,(ed.a[1]+ed.b[1])/2];
       if(distEdge(...M)<m) continue;
       if(keys.some(k=>Math.hypot(k.M[0]-M[0],k.M[1]-M[1])<P.cell*1.2)) continue;
@@ -378,8 +417,10 @@ function makeTiles(P,L,Lt){
         if(Lt.drawEdges) addBar(own[0],ed.a,ed.b,P.gw,P.gh,"g",P.lap?{multi:ed.cells.map(ci=>terr[ci])}:(own.length===1?cpoly[ed.cells[0]]:hull(cpoly[ed.cells[0]].concat(cpoly[ed.cells[1]]))));
       }
       else if(lapEdges.has(ed)) lapStrip(ed,own);
-      else {
-        // seam edge: each side prints a half-width bar on its own side of the line
+      else if(P.pat!=="kikko") {
+        // seam edge: each side prints a half-width bar on its own side of the line.
+        // Kikkō omits these: the triangle grid isn't part of the visible pattern, so half-bars
+        // would show as faint cuts. Hex bars (cell infill) already meet at edge midpoints.
         const dx=ed.b[0]-ed.a[0], dy=ed.b[1]-ed.a[1], l=Math.hypot(dx,dy);
         for(let k=0;k<2;k++){
           const c=Lt.cells[ed.cells[k]].c; let nx=-dy/l, ny=dx/l;
@@ -1043,7 +1084,9 @@ function render(){
   if(P.b/2 < maxw+0.5) W.push(`Border width ${P.b} mm is too thin. Use at least ${(2*maxw+1).toFixed(1)} mm so bar ends embed in the border.`);
   [["Grid bar",P.gw],["Infill bar",P.iw]].forEach(([n,w])=>{const k=w/0.4;if(Math.abs(k-Math.round(k))>0.01)W.push(`${n} width ${w} mm isn't a multiple of 0.4 mm. With a 0.4 nozzle that leaves gaps or thin fill inside the bar; ${(Math.round(k)*0.4).toFixed(1)} mm prints cleaner.`);});
   if(P.zig){const k=P.gw/2/0.4; if(Math.abs(k-Math.round(k))>0.01||P.gw/2<0.8) W.push(`Seam bars print at half the grid width (${(P.gw/2).toFixed(1)} mm). Use a grid width that halves to a multiple of 0.4 mm, like 1.6, 2.4 or 3.2 mm.`);}
-  if(P.zig&&P.pat==="kikko") W.push("Kikkō has no bars along the triangle grid, so zigzag seams add thin seam bars that show as faint lines. Straight seams hide better for this pattern.");
+  if(P.zig&&P.pat==="kikko") W.push("Kikkō seams follow the hex cells: half-bars on the invisible triangle grid are omitted so joins disappear into the pattern.");
+  if(P.lap&&P.pat==="kikko") W.push("Lap seams still cut along the triangle grid under kikkō, so a faint join can show. Zigzag hides better for this pattern.");
+  if(P.zig&&P.pat==="hishi") W.push("Hishi seams step along the diamond edges (a regular 45°/135° stairstep). That keeps every joint on the lattice; the stair is the grain of the pattern, not a straight cut.");
   if(P.pins){
     if(P.hub<P.pin+2.4) W.push(`Hub diameter ${P.hub} mm leaves less than 1.2 mm of wall around a ${P.pin} mm peg hole. Use a hub of at least ${(P.pin+2.4).toFixed(1)} mm.`);
     if(P.sepb&&model.borders.some(b=>!b.pegs)) W.push("Some border pieces have no pegs, so they'd rely on the backing lattice alone. Use a larger cell size or a thicker border.");

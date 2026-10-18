@@ -92,11 +92,18 @@ test("colored backers: one per tile, clear of pucks, frame and tiles; pucks get 
   const m = E.model;
   assert.ok(m.tiles.every(t => t.backer && t.backer.length > 0), "every tile has a backer");
   assert.strictEqual(countOverlaps(assembled(E), m.P.W, m.P.H, 6000), 0);
-  // the backer covers the tile's area (so the wall can't show through), except the puck holes
-  const t = m.tiles[0], cx = (Math.max(t.x0, m.P.b + 1) + Math.min(t.x1, m.P.W - m.P.b - 1)) / 2;
+  // Backer covers the tile's cells (pattern-aware ownership), not the nominal rectangle —
+  // sample along the backer's own bounding box, skipping puck holes.
+  const t = m.tiles[0];
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const b of t.backer) for (const p of b.pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+  const cx = (x0 + x1) / 2, holes = m.sockets.filter(s => s.tile === 0);
   let covered = 0, n = 0;
-  for (let y = Math.max(t.y0, m.P.b + 2); y < Math.min(t.y1, m.P.H - m.P.b - 2); y += 3) { n++; if (solidAt([cx, y], t.backer[0].z0 + 0.4, t.backer)) covered++; }
-  assert.ok(covered / n > 0.9, "backer coverage " + covered + "/" + n);
+  for (let y = y0 + 2; y < y1 - 2; y += 3) {
+    if (holes.some(h => Math.hypot(h.p[0] - cx, h.p[1] - y) < m.P.hub)) continue;
+    n++; if (solidAt([cx, y], t.backer[0].z0 + 0.4, t.backer)) covered++;
+  }
+  assert.ok(n > 10 && covered / n > 0.9, "backer coverage " + covered + "/" + n);
 });
 
 test("per-tile inserts: a tile can switch insert without touching its neighbors", () => {
@@ -114,6 +121,62 @@ test("two-color lattice splits each tile into grid and insert parts", () => {
   assert.ok(E.twoColor(E.model.P));
   const t = E.model.tiles[0], all = E.tileTris(t).length, g = E.tileTris(t, "grid").length, i = E.tileTris(t, "ins").length;
   assert.ok(g > 0 && i > 0 && g + i === all);
+});
+
+test("pattern-aware seams: each pattern's joins follow its own lattice grain", () => {
+  const ang = (ed) => {
+    const dx = ed.b[0] - ed.a[0], dy = ed.b[1] - ed.a[1];
+    return ((Math.atan2(dy, dx) * 180 / Math.PI) + 180) % 180;
+  };
+  const near = (a, b, tol = 8) => Math.abs(a - b) < tol || Math.abs(a - b) > 180 - tol;
+  const pairSeams = (E) => {
+    const { Lt, L, P } = E.model;
+    const cellTile = E.assignCellTiles(P, Lt, L);
+    const out = {};
+    for (const ed of Lt.edges) {
+      if (ed.cells.length !== 2) continue;
+      const a = cellTile[ed.cells[0]], b = cellTile[ed.cells[1]];
+      if (a === b) continue;
+      const k = [a, b].sort((x, y) => x - y).join("-");
+      (out[k] || (out[k] = [])).push(ang(ed));
+    }
+    return out;
+  };
+
+  // Asanoha: horizontal tile joins sit on base edges (0°); vertical joins zigzag 60°/120°.
+  {
+    const E = loadEngine({ W: 600, H: 400, cell: 40, pat: "asanoha", seam: "zig", mount: "pegs" }); E.build();
+    const pairs = pairSeams(E), { L } = E.model;
+    for (const [k, angs] of Object.entries(pairs)) {
+      const [a, b] = k.split("-").map(Number);
+      const sameRow = Math.floor(a / L.nx) === Math.floor(b / L.nx);
+      if (sameRow) assert.ok(angs.every(x => near(x, 60) || near(x, 120)), "asanoha vertical seam zigzags: " + angs);
+      else assert.ok(angs.every(x => near(x, 0)), "asanoha horizontal seam on base edges: " + angs);
+    }
+  }
+
+  // Kaku: every tile join is a single axis — all horizontal or all vertical edges.
+  {
+    const E = loadEngine({ W: 600, H: 400, cell: 40, pat: "kaku", seam: "zig", mount: "pegs" }); E.build();
+    for (const angs of Object.values(pairSeams(E))) {
+      const horiz = angs.every(x => near(x, 0)), vert = angs.every(x => near(x, 90));
+      assert.ok(horiz || vert, "kaku seam must be one axis: " + angs);
+    }
+  }
+
+  // Kikkō: no phantom half-bars on the invisible triangle grid.
+  {
+    const E = loadEngine({ W: 600, H: 400, cell: 40, pat: "kikko", seam: "zig", mount: "pegs" }); E.build();
+    const hBars = E.model.tiles.reduce((n, t) => n + t.boxes.filter(b => b.kind === "h").length, 0);
+    assert.strictEqual(hBars, 0, "kikkō must not print triangle-grid seam half-bars");
+    assert.ok(E.model.tiles.every(t => t.fits && t.boxes.length), "kikkō tiles still build and fit");
+  }
+
+  // Hishi: tiles still fit the bed (lattice-band tiles would not).
+  {
+    const E = loadEngine({ W: 600, H: 400, cell: 40, pat: "hishi", seam: "zig", mount: "pegs" }); E.build();
+    assert.ok(E.model.tiles.every(t => t.fits && t.boxes.length), "hishi tiles fit with panel-space cuts");
+  }
 });
 
 test("furniture clips: every frame piece gets a clip, leaves reach the shelf walls, bodies hide behind the bar", () => {
