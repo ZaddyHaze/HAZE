@@ -1,6 +1,6 @@
 # Handoff to Cursor — state as of Oct 17, 2026
 
-Brand: **Living Lattice**, designed by Travis Hergenreder. Start with `AGENTS.md`, then `docs/DESIGN.md`. Run `npm test` first: 99 checks should pass.
+Brand: **Living Lattice**, designed by Travis Hergenreder. Start with `AGENTS.md`, then `docs/DESIGN.md`. Run `npm test` first: 100 checks should pass.
 
 ## What's done
 - Builder (`index.html` + `src/engine.js`) with a simple panel of 7 choices and everything else under Advanced.
