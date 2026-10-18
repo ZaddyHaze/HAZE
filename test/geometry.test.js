@@ -123,6 +123,37 @@ test("two-color lattice splits each tile into grid and insert parts", () => {
   assert.ok(g > 0 && i > 0 && g + i === all);
 });
 
+test("frame edges start on full or half cells — no printed slivers", () => {
+  const edgeFracs = (Lt, P) => {
+    const x0 = P.b, x1 = P.W - P.b, y0 = P.b, y1 = P.H - P.b, out = [];
+    const add = (cl, axis, lo, hi) => {
+      const xs = cl.poly.map(p => p[0]), ys = cl.poly.map(p => p[1]);
+      const a = axis === "x" ? Math.min(...xs) : Math.min(...ys);
+      const b = axis === "x" ? Math.max(...xs) : Math.max(...ys);
+      if (!(a < lo + 0.5 && b > lo) && !(b > hi - 0.5 && a < hi)) return;
+      const span = Math.max(0, Math.min(b, hi) - Math.max(a, lo)), full = b - a;
+      if (span > 0.05 && full > 0.05) out.push(span / full);
+    };
+    for (const cl of Lt.cells) { add(cl, "x", x0, x1); add(cl, "y", y0, y1); }
+    return out;
+  };
+  for (const pat of ["asanoha", "kaku", "kikko", "hishi", "mitsukude"]) {
+    const E = loadEngine({ W: 600, H: 400, cell: 40, b: 19, pat, seam: "zig", mount: "pegs" }); E.build();
+    const fracs = edgeFracs(E.model.Lt, E.model.P);
+    // Straddling edge cells must be ≥ ~half; inset-full (no straddlers) is also fine.
+    if (fracs.length) {
+      const min = Math.min(...fracs);
+      assert.ok(min >= 0.45, `${pat} edge cell fraction ${min.toFixed(2)} is a sliver (want full or half)`);
+    }
+    assert.ok(E.model.tiles.every(t => t.fits && t.boxes.length), `${pat} tiles still fit`);
+  }
+  const f1 = loadEngine().latticeFit(0, 560, 40);
+  assert.strictEqual(f1.mode, "full");
+  assert.ok(Math.abs(f1.margin) < 0.01);
+  const f2 = loadEngine().latticeFit(0, 580, 40);
+  assert.strictEqual(f2.mode, "half");
+});
+
 test("pattern-aware seams: each pattern's joins follow its own lattice grain", () => {
   const ang = (ed) => {
     const dx = ed.b[0] - ed.a[0], dy = ed.b[1] - ed.a[1];

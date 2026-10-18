@@ -74,22 +74,66 @@ function insertSegs(ins,cell){
   }
   return out;
 }
+/* Fit an integer count of full or half cell pitches into [lo, hi]. Even step count →
+   full cells at both ends; odd → half cells. Tiny leftover becomes equal empty margin
+   inside the frame (a millimetre gap beats a printed sliver). */
+function latticeFit(lo, hi, pitch){
+  const inner=Math.max(pitch*0.5, hi-lo), step=pitch/2;
+  let steps=Math.max(1, Math.round(inner/step));
+  let span=steps*step, margin=(inner-span)/2;
+  if(margin<-0.05){ steps=Math.max(1, Math.floor(inner/step+1e-9)); span=steps*step; margin=(inner-span)/2; }
+  const mode=steps%2===0?"full":"half";
+  // Full grid lines every `pitch`. Half mode puts a mid-cell cut at lo+margin.
+  const origin=mode==="full"?lo+margin:lo+margin-step;
+  return {origin, mode, margin, span};
+}
+
 function lattice(P){
-  const {W,H,cell:s}=P, cx=W/2, cy=H/2, cells=[], emap=new Map();
+  const {W,H,cell:s}=P, b=Math.max(0, P.b||0);
+  const x0=b, x1=W-b, y0=b, y1=H-b;
+  const cells=[], emap=new Map();
   let ang=P.rot?Math.PI/2:0; if(P.pat==="hishi") ang+=Math.PI/4;
   const ca=Math.cos(ang), sa=Math.sin(ang);
-  const tf=(p)=>[cx+p[0]*ca-p[1]*sa, cy+p[0]*sa+p[1]*ca];
-  const inView=(pts)=>{let a=1e9,b=-1e9,c=1e9,d=-1e9;for(const p of pts){a=Math.min(a,p[0]);b=Math.max(b,p[0]);c=Math.min(c,p[1]);d=Math.max(d,p[1]);}return b>0&&a<W&&d>0&&c<H;};
+  // Anchor local (0,0) to a frame-aligned origin (not the panel centre), so borders
+  // land on full/half shapes instead of arbitrary fractions.
+  let ox=W/2, oy=H/2, alignX=null, alignY=null;
+  if(isTri(P.pat)){
+    const h=s*Math.sqrt(3)/2;
+    if(!P.rot){ alignX=latticeFit(x0,x1,s); alignY=latticeFit(y0,y1,h); }
+    else{ /* 90°: panel x ← −local y (pitch h), panel y ← local x (pitch s) */
+      alignX=latticeFit(x0,x1,h); alignY=latticeFit(y0,y1,s); }
+    ox=alignX.origin; oy=alignY.origin;
+  }else if(P.pat==="hishi"){
+    const d=s*Math.SQRT2; // diamond width along the panel axes
+    alignX=latticeFit(x0,x1,d); alignY=latticeFit(y0,y1,d);
+    ox=alignX.origin; oy=alignY.origin;
+  }else{
+    alignX=latticeFit(x0,x1,s); alignY=latticeFit(y0,y1,s);
+    ox=alignX.origin; oy=alignY.origin;
+  }
+  const tf=(p)=>[ox+p[0]*ca-p[1]*sa, oy+p[0]*sa+p[1]*ca];
+  // Keep cells whose visible part inside the frame opening is at least ~40% of the cell —
+  // drops the millimetre slivers that used to sit on the far edge after a full/half snap.
+  const minFrac=0.4;
+  const keep=(pts)=>{
+    let a=1e9,bb=-1e9,c=1e9,d=-1e9; for(const p of pts){a=Math.min(a,p[0]);bb=Math.max(bb,p[0]);c=Math.min(c,p[1]);d=Math.max(d,p[1]);}
+    if(bb<=0||a>=W||d<=0||c>=H) return false;
+    const ix0=Math.max(a,x0), ix1=Math.min(bb,x1), iy0=Math.max(c,y0), iy1=Math.min(d,y1);
+    if(ix1-ix0<1e-6||iy1-iy0<1e-6) return false;
+    const full=(bb-a)*(d-c), vis=Math.max(0,ix1-ix0)*Math.max(0,iy1-iy0);
+    return full<1e-6 || vis/full>=minFrac;
+  };
   const key=(a,b)=>{const k1=Math.round(a[0]*100)+","+Math.round(a[1]*100),k2=Math.round(b[0]*100)+","+Math.round(b[1]*100);return k1<k2?k1+"|"+k2:k2+"|"+k1};
   const addEdge=(a,b,ci)=>{const k=key(a,b);let e=emap.get(k);if(!e){e={a,b,cells:[]};emap.set(k,e);}e.cells.push(ci);};
   const mid=(a,b)=>[(a[0]+b[0])/2,(a[1]+b[1])/2];
-  const R=Math.hypot(W,H)/2+2*s;
+  // Cover the panel in local lattice indices (rotation needs large negative ranges).
+  const R=Math.hypot(W,H)+4*s;
   if(isTri(P.pat)){
-    const h=s*Math.sqrt(3)/2, J=Math.ceil(R/h)+1, I=Math.ceil(R/s)+1;
+    const h=s*Math.sqrt(3)/2, J=Math.ceil(R/h)+2, I=Math.ceil(R/s)+2;
     const v=(i,j)=>tf([i*s+j*s/2, j*h]);
     for(let j=-J;j<=J;j++)for(let i=-I-J;i<=I+J;i++){
       for(const [k,tri] of [[0,[v(i,j),v(i+1,j),v(i,j+1)]],[1,[v(i+1,j),v(i+1,j+1),v(i,j+1)]]]){
-        if(!inView(tri))continue;
+        if(!keep(tri))continue;
         const c=[(tri[0][0]+tri[1][0]+tri[2][0])/3,(tri[0][1]+tri[1][1]+tri[2][1])/3];
         const infill=[];
         for(let e=0;e<3;e++){
@@ -101,16 +145,17 @@ function lattice(P){
       }
     }
   } else {
-    const I=Math.ceil(R/s)+1, o=s/2, v=(i,j)=>tf([i*s-o, j*s-o]);
+    const I=Math.ceil(R/s)+2;
+    const v=(i,j)=>tf([i*s, j*s]);
     for(let j=-I;j<=I;j++)for(let i=-I;i<=I;i++){
       const q=[v(i,j),v(i+1,j),v(i+1,j+1),v(i,j+1)];
-      if(!inView(q))continue;
+      if(!keep(q))continue;
       const c=[(q[0][0]+q[2][0])/2,(q[0][1]+q[2][1])/2];
       const ci=cells.length; cells.push({c,poly:q,infill:[],kind:"i",i,j,k:0});
       for(let e=0;e<4;e++) addEdge(q[e],q[(e+1)%4],ci);
     }
   }
-  return {cells,edges:[...emap.values()],drawEdges:P.pat!=="kikko"};
+  return {cells,edges:[...emap.values()],drawEdges:P.pat!=="kikko",origin:[ox,oy],align:{x:alignX,y:alignY}};
 }
 
 /* Assign each lattice cell to a bed-sized tile so seams follow that pattern's grain —
@@ -132,6 +177,8 @@ function assignCellTiles(P, Lt, L){
   };
   if(P.pat==="hishi") return Lt.cells.map(cl=>tileAt(cl.c[0], cl.c[1]));
   if(isTri(P.pat)){
+    // After a 90° rotate, lattice j no longer tracks panel rows — use panel space.
+    if(P.rot) return Lt.cells.map(cl=>tileAt(cl.c[0], cl.c[1]));
     const js=Lt.cells.map(cl=>cl.j), j0=Math.min(...js), j1=Math.max(...js);
     const nj=Math.max(1, j1-j0+1);
     return Lt.cells.map(cl=>{
@@ -287,9 +334,15 @@ function makeTiles(P,L,Lt){
       for(const p of [ed.a,ed.b]){const k=vk(p);let v=vmap.get(k);if(!v){v={p,cells:new Set(),seam:false};vmap.set(k,v);}ed.cells.forEach(c=>v.cells.add(c));if(seam)v.seam=true;}
     }
     const ro=P.hub/2;
-    // peg holes: grid points under the border's backing lattice, owned by a single tile, spaced along the border
+    // peg holes: grid points under the border's backing lattice, owned by a single tile, spaced along the border.
+    // Need near-full vertex valence so the hub ring (and snap lip) isn't missing sectors after
+    // edge cells outside the frame opening are dropped.
     if(P.sepb){
-      const cand=[...vmap.values()].filter(v=>{const d=distEdge(...v.p);const ts=new Set([...v.cells].map(c=>cellTile[c]));return !v.seam&&ts.size===1&&d>=P.b+ro+0.6&&d<=P.b+depth-ro-0.6;});
+      const minCells=isTri(P.pat)?5:3;
+      const cand=[...vmap.values()].filter(v=>{
+        const d=distEdge(...v.p); const ts=new Set([...v.cells].map(c=>cellTile[c]));
+        return !v.seam&&ts.size===1&&v.cells.size>=minCells&&d>=P.b+ro+0.6&&d<=P.b+depth-ro-0.6;
+      });
       cand.sort((a,b)=>a.p[0]-b.p[0]||a.p[1]-b.p[1]);
       const minGap=Math.max(55,P.cell*1.4);
       for(const v of cand){ if(pinPts.every(q=>Math.hypot(q[0]-v.p[0],q[1]-v.p[1])>=minGap)){pinPts.push(v.p);pinCells.push([...v.cells]);pinR.push([P.pin/2,P.hub/2,SNAP(P).on?(P.pin-P.fc)/2+SNAP(P).bd+0.1:0]);} }

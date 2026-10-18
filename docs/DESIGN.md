@@ -21,7 +21,8 @@ A wall panel of traditional kumiko lattice, 3D printed in bed-sized tiles on a B
 
 ```
 readParams()          read controls → P
-lattice(P)            cells (polygons + infill segments) and shared edges for the pattern
+lattice(P)            cells (polygons + infill segments) and shared edges for the pattern;
+                      origin snapped with latticeFit so frame edges land on full or half cells
 candidates(P)         choose nx × ny tile grid so every tile fits the bed (turning tiles 90° if needed)
 makeTiles(P, L, Lt)   assign cells to tiles (pattern-aware: assignCellTiles), build bars clipped to each
                       tile's own cells ("territory"), seams (zig / lap / straight), hubs + peg holes,
