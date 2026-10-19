@@ -58,7 +58,7 @@ function loadEngine(overrides = {}) {
   const api = vm.runInContext(`({
     get model(){return model}, build, readParams, testKit, readme, layoutSVG, stl,
     tileTris, borderTris, plateTris, keyTris, puckTris, cleatTris, hookTris, standoffTris, pegTemplateSVG, wallTemplateSVG,
-    allFeet, WALL, SNAP, COVE, cleatDims, shimTris, shimCount, lattice, latticeFit, assignCellTiles, backerTris, twoColor, BACKER, insertSegs, FITCLIP, allClips, clipTris
+    allFeet, WALL, SNAP, COVE, cleatDims, shimTris, shimCount, lattice, backerTris, twoColor, BACKER, insertSegs, FITCLIP, allClips, clipTris
   })`, sandbox);
   api.vals = vals;
   api.rebuild = (more = {}) => { Object.assign(vals, more); api.build(); return api.model; };
