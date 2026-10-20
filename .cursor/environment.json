@@ -1,0 +1,11 @@
+{
+  "name": "Living Lattice",
+  "install": "bash .cursor/cloud-install.sh",
+  "start": "bash .cursor/cloud-start.sh",
+  "ports": [
+    {
+      "name": "Living Lattice builder",
+      "port": 8080
+    }
+  ]
+}

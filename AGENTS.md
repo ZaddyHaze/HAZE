@@ -30,6 +30,13 @@ npm run test-kit               # fit coupons → out/test-kit
 npm run serve                  # open http://localhost:8080
 ```
 
+## Cursor Cloud specific instructions
+
+- There is no lockfile and no application package install. `npm ci` fails. Node 18+ is enough; this image provides Node 22.
+- `.cursor/cloud-install.sh` installs `http-server` 14.1.1. `.cursor/cloud-start.sh` serves the repo at http://localhost:8080 and exits immediately when that port is already up.
+- `npm test` is the geometry suite and can take a few minutes. A small export is `node cli/generate.js --set W=200 --set H=200 --out /tmp/ll-smoke`.
+- The preview and cut list run from local scripts. The Export zip loads JSZip from cdnjs.cloudflare.com, and the page loads fonts from fonts.googleapis.com.
+
 ## Expert skills in this project
 Two expert roles ship with the project. Use them whenever the work touches their area:
 - **Master craftsman & designer** — joints, materials, print orientation, proportion, design reviews. Review order: will it hold → can it be made → is it beautiful → is it a product → one fix with exact dimensions.
