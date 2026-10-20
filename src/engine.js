@@ -1392,7 +1392,48 @@ function applyMade(){
 }
 $("made").addEventListener("input",applyMade);
 $("op").addEventListener("input",()=>{if($("made").value==="cube"){$("W").value=$("H").value=(+$("op").value||335)-4;}});
-$("led").addEventListener("input",()=>{const on=$("led").checked, b=+$("b").value;$("flt").value=on?20:0;$("cove").checked=on;if(on&&b<19)$("b").value=19;if(!on&&b===19)$("b").value=10;queue();});
+function setLedHalo(on){
+  const box=$("cv")&&$("cv").parentElement;
+  if(box&&box.classList&&typeof box.classList.toggle==="function") box.classList.toggle("led-halo",!!on);
+}
+$("led").addEventListener("input",()=>{const on=$("led").checked, b=+$("b").value;$("flt").value=on?20:0;$("cove").checked=on;if(on&&b<19)$("b").value=19;if(!on&&b===19)$("b").value=10;setLedHalo(on); queue();});
+function markPresetChip(key){
+  const bar=$("presetBar"); if(!bar||typeof bar.querySelectorAll!=="function") return;
+  bar.querySelectorAll(".preset-chip").forEach(btn=>btn.classList.toggle("active", btn.dataset.preset===key));
+}
+function applyChipPreset(key){
+  const hb={twin:"hb-twin",full:"hb-full",queen:"hb-queen",cal:"hb-cal","cal-king":"hb-cal",king:"hb-king"};
+  markPresetChip(key==="kallax"?"cube":key);
+  if(key==="cube"||key==="kallax"){
+    $("made").value="cube"; $("size").value="30"; $("cell").value="30"; $("pat").value="kikko"; applyMade(); return;
+  }
+  if(hb[key]){
+    $("made").value=hb[key]; applyMade();
+    if(key==="queen"||key==="king"){ $("size").value="60"; $("cell").value="60"; }
+    else { $("size").value="40"; $("cell").value="40"; }
+    if(key==="king") $("pat").value="mitsukude"; else $("pat").value="asanoha";
+    if(!$("led").checked){ $("led").checked=true; $("led").dispatchEvent(new Event("input")); }
+    else queue();
+    return;
+  }
+  if(key==="wall-led"){
+    $("made").value="wall"; $("W").value=900; $("H").value=600; $("pat").value="asanoha";
+    $("size").value="40"; $("cell").value="40"; $("style").value="swap"; $("seam").value="zig"; $("mount").value="pegs";
+    if(!$("led").checked){ $("led").checked=true; $("led").dispatchEvent(new Event("input")); }
+    else queue();
+    return;
+  }
+  if(key==="starter"){
+    $("made").value="wall"; $("W").value=600; $("H").value=400; $("pat").value="asanoha";
+    $("size").value="40"; $("cell").value="40"; $("style").value="swap"; $("seam").value="zig"; $("mount").value="pegs";
+    if($("led").checked){ $("led").checked=false; $("led").dispatchEvent(new Event("input")); }
+    else queue();
+  }
+}
+if($("presetBar")) $("presetBar").addEventListener("click",e=>{
+  const btn=e.target.closest("[data-preset]"); if(!btn) return;
+  applyChipPreset(btn.dataset.preset);
+});
 $("photo").addEventListener("change",e=>{
   const f=e.target.files&&e.target.files[0]; if(!f) return;
   const rd=new FileReader(); rd.onload=()=>{ const im=new Image(); im.onload=()=>{
@@ -1431,10 +1472,8 @@ new MutationObserver(()=>model&&render()).observe(document.documentElement,{attr
 (function applyLinkPreset(){
   let key="";
   try{ key=(new URLSearchParams(location.search).get("preset")||"").toLowerCase(); if(!key) key=(location.hash||"").slice(1).toLowerCase(); }catch(e){}
-  const hb={twin:"hb-twin",full:"hb-full",queen:"hb-queen",cal:"hb-cal","cal-king":"hb-cal",king:"hb-king"};
-  if(key==="cube"||key==="kallax"){ $("made").value="cube"; applyMade(); }
-  else if(hb[key]){ $("made").value=hb[key]; applyMade(); }
-  else if(key==="wall-led"){ $("made").value="wall"; $("led").checked=true; $("led").dispatchEvent(new Event("input")); }
-  else if(key==="starter"){ $("made").value="wall"; $("W").value=600; $("H").value=400; $("pat").value="asanoha"; }
+  if(key) applyChipPreset(key);
+  else markPresetChip("starter");
+  setLedHalo($("led").checked);
 })();
 build();

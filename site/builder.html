@@ -71,11 +71,29 @@ td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 .notes{font-size:13px;color:var(--muted);max-width:68ch}
 .notes h2{font-family:var(--f-display);font-size:19px;color:var(--ink);margin:6px 0 6px}
 .notes ul{padding-left:18px;margin:0;display:grid;gap:4px}
+.brand-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 20px;margin-bottom:8px}
+.brand-link{font-family:var(--f-display);font-weight:800;font-size:15px;letter-spacing:.08em;color:var(--indigo);text-decoration:none}
+.brand-link:hover{text-decoration:underline}
+.preset-bar{display:flex;flex-wrap:wrap;gap:6px}
+.preset-chip{font:500 12px var(--f-body);padding:6px 11px;border-radius:4px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);cursor:pointer}
+.preset-chip:hover,.preset-chip.active{background:var(--indigo);color:var(--sheet);border-color:var(--indigo)}
+.canvas-box.led-halo{box-shadow:0 0 0 1px var(--line),0 0 36px rgba(255,214,150,.55),0 0 80px rgba(255,185,105,.28)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
 <div class="wrap">
   <header>
+    <div class="brand-row">
+      <a class="brand-link" href="index.html">← Living Lattice</a>
+      <div class="preset-bar" id="presetBar" role="group" aria-label="Panel presets">
+        <button type="button" class="preset-chip active" data-preset="starter">600×400 Starter</button>
+        <button type="button" class="preset-chip" data-preset="wall-led">LED Wall Art 900×600</button>
+        <button type="button" class="preset-chip" data-preset="cube">KALLAX Cube 335×335</button>
+        <button type="button" class="preset-chip" data-preset="twin">Twin Headboard</button>
+        <button type="button" class="preset-chip" data-preset="queen">Queen Headboard</button>
+        <button type="button" class="preset-chip" data-preset="king">King Headboard</button>
+      </div>
+    </div>
     <h1>Living Lattice Builder<small>Lattice panels bigger than your bed, split into printable tiles that lock together without glue</small></h1>
   </header>
 
@@ -2032,7 +2050,48 @@ function applyMade(){
 }
 $("made").addEventListener("input",applyMade);
 $("op").addEventListener("input",()=>{if($("made").value==="cube"){$("W").value=$("H").value=(+$("op").value||335)-4;}});
-$("led").addEventListener("input",()=>{const on=$("led").checked, b=+$("b").value;$("flt").value=on?20:0;$("cove").checked=on;if(on&&b<19)$("b").value=19;if(!on&&b===19)$("b").value=10;queue();});
+function setLedHalo(on){
+  const box=$("cv")&&$("cv").parentElement;
+  if(box&&box.classList&&typeof box.classList.toggle==="function") box.classList.toggle("led-halo",!!on);
+}
+$("led").addEventListener("input",()=>{const on=$("led").checked, b=+$("b").value;$("flt").value=on?20:0;$("cove").checked=on;if(on&&b<19)$("b").value=19;if(!on&&b===19)$("b").value=10;setLedHalo(on); queue();});
+function markPresetChip(key){
+  const bar=$("presetBar"); if(!bar||typeof bar.querySelectorAll!=="function") return;
+  bar.querySelectorAll(".preset-chip").forEach(btn=>btn.classList.toggle("active", btn.dataset.preset===key));
+}
+function applyChipPreset(key){
+  const hb={twin:"hb-twin",full:"hb-full",queen:"hb-queen",cal:"hb-cal","cal-king":"hb-cal",king:"hb-king"};
+  markPresetChip(key==="kallax"?"cube":key);
+  if(key==="cube"||key==="kallax"){
+    $("made").value="cube"; $("size").value="30"; $("cell").value="30"; $("pat").value="kikko"; applyMade(); return;
+  }
+  if(hb[key]){
+    $("made").value=hb[key]; applyMade();
+    if(key==="queen"||key==="king"){ $("size").value="60"; $("cell").value="60"; }
+    else { $("size").value="40"; $("cell").value="40"; }
+    if(key==="king") $("pat").value="mitsukude"; else $("pat").value="asanoha";
+    if(!$("led").checked){ $("led").checked=true; $("led").dispatchEvent(new Event("input")); }
+    else queue();
+    return;
+  }
+  if(key==="wall-led"){
+    $("made").value="wall"; $("W").value=900; $("H").value=600; $("pat").value="asanoha";
+    $("size").value="40"; $("cell").value="40"; $("style").value="swap"; $("seam").value="zig"; $("mount").value="pegs";
+    if(!$("led").checked){ $("led").checked=true; $("led").dispatchEvent(new Event("input")); }
+    else queue();
+    return;
+  }
+  if(key==="starter"){
+    $("made").value="wall"; $("W").value=600; $("H").value=400; $("pat").value="asanoha";
+    $("size").value="40"; $("cell").value="40"; $("style").value="swap"; $("seam").value="zig"; $("mount").value="pegs";
+    if($("led").checked){ $("led").checked=false; $("led").dispatchEvent(new Event("input")); }
+    else queue();
+  }
+}
+if($("presetBar")) $("presetBar").addEventListener("click",e=>{
+  const btn=e.target.closest("[data-preset]"); if(!btn) return;
+  applyChipPreset(btn.dataset.preset);
+});
 $("photo").addEventListener("change",e=>{
   const f=e.target.files&&e.target.files[0]; if(!f) return;
   const rd=new FileReader(); rd.onload=()=>{ const im=new Image(); im.onload=()=>{
@@ -2071,11 +2130,9 @@ new MutationObserver(()=>model&&render()).observe(document.documentElement,{attr
 (function applyLinkPreset(){
   let key="";
   try{ key=(new URLSearchParams(location.search).get("preset")||"").toLowerCase(); if(!key) key=(location.hash||"").slice(1).toLowerCase(); }catch(e){}
-  const hb={twin:"hb-twin",full:"hb-full",queen:"hb-queen",cal:"hb-cal","cal-king":"hb-cal",king:"hb-king"};
-  if(key==="cube"||key==="kallax"){ $("made").value="cube"; applyMade(); }
-  else if(hb[key]){ $("made").value=hb[key]; applyMade(); }
-  else if(key==="wall-led"){ $("made").value="wall"; $("led").checked=true; $("led").dispatchEvent(new Event("input")); }
-  else if(key==="starter"){ $("made").value="wall"; $("W").value=600; $("H").value=400; $("pat").value="asanoha"; }
+  if(key) applyChipPreset(key);
+  else markPresetChip("starter");
+  setLedHalo($("led").checked);
 })();
 build();
 
